@@ -1,0 +1,8 @@
+/home/konstantinos/Documents/test/test1 /home/konstantinos/Documents/backup/test1_backup
+/home/konstantinos/Documents/test/test2 /home/konstantinos/Documents/backup/test2_backup
+/home/konstantinos/Documents/test/test3 /home/konstantinos/Documents/backup/test3_backup
+/home/konstantinos/Documents/test/test4 /home/konstantinos/Documents/backup/test4_backup
+/home/konstantinos/Documents/test/test5 /home/konstantinos/Documents/backup/test5_backup
+/home/konstantinos/Documents/test/test6 /home/konstantinos/Documents/backup/test6_backup
+/home/konstantinos/Documents/test/test7 /home/konstantinos/Documents/backup/test7_backup
+/home/konstantinos/Documents/test/test8 /home/konstantinos/Documents/backup/test8_backup
