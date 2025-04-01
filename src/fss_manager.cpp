@@ -10,6 +10,12 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <bits/stdc++.h>
+#include <unordered_map>
+#include "../include/sync_info_mem_store.hpp"
+#include <queue>
+#include <sys/inotify.h>
+
 
 #define MAX 5
 #define READ 0
@@ -19,6 +25,11 @@ using namespace std;
 
 int main() {
     int fd_fss_in, fd_fss_out;
+    
+    unordered_map<string, sync_info_struct*> sync_info_mem_store;
+    queue<string> jobs_queue;
+
+
 
     //create 2 named pipes (fss_in and fss_out) to communincate with fss_console
     //create fss_in for reading 
@@ -44,7 +55,7 @@ int main() {
         exit(1);
     }*/
 
-    //read config file and fork processes or store them in queue if more than MAX
+    //read config file and store the info into sync_info_mem_store
     ifstream configFile("config.txt");
     if (!configFile) {
         perror("Failed to open config.txt");
@@ -56,6 +67,39 @@ int main() {
         istringstream iss(line);
         iss >> source >> destination;
         cout << "Source: " << source << ", Destination: " << destination << endl;
+
+        /*Making a new struct to keep info about this directory*/
+        sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
+        sync_info_struct_ptr->source = source;
+        sync_info_struct_ptr->destination = destination;
+        sync_info_struct_ptr->status = "starting";
+        sync_info_struct_ptr->active = true;
+        sync_info_struct_ptr->last_sync_time=0;
+        /*Put the sruct pointer containing info about the directory in the hash map*/
+        sync_info_mem_store[source] = sync_info_struct_ptr;
+    }
+
+    //start the inotify thing 
+    int inotify_fd = inotify_init();
+    if (inotify_fd==-1) {
+        perror("inotify_init problem");
+        exit(1);
+    }
+    //start watching all the stored directories by storing the watch descriptor in the sync_info_mem_store 
+    for (auto it=sync_info_mem_store.begin() ; it != sync_info_mem_store.end() ; ++it) {
+        it->second->wd = inotify_add_watch(inotify_fd, it->second->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+        if (it->second->wd == -1) {
+            perror("inotify_add_wach problem");
+            exit(1);
+        }
+    }
+
+
+
+    /*
+    for (auto it=sync_info_mem_store.begin() ; it !=sync_info_mem_store.end() ; ++it) {
+        cout << it->second->source << " " << it->second->destination << endl;
+    }*/
 
         pid_t childpid;
         childpid = fork();
@@ -70,6 +114,5 @@ int main() {
         } else {    // Parent process
             printf("I am the parent process with PID: %lu\n", (long)getpid());
         }
-    }
     return 0;
 }
