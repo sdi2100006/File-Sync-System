@@ -23,11 +23,36 @@
 
 using namespace std;
 
-int main() {
+int main(int argc, char* argv[]) {
+
     int fd_fss_in, fd_fss_out;
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
     queue<string> jobs_queue;
+
+    //read from command line 
+    int opt, worker_limit=5;
+    string manager_logfile, config_file;
+    
+
+    while ((opt = getopt(argc, argv, "l:c:n:")) != -1) {
+        switch (opt) {
+            case 'l':
+                manager_logfile = optarg;
+                break;
+            case 'c':
+                config_file = optarg;
+                break;
+            case 'n': 
+                worker_limit = atoi(optarg);
+                break;
+            default:
+                cout << "wrong call" << endl;
+                exit(1);
+        }
+    }
+
+    cout << manager_logfile << " " << config_file << " " << worker_limit << endl;
 
 
 
@@ -56,14 +81,14 @@ int main() {
     }*/
 
     //read config file and store the info into sync_info_mem_store
-    ifstream configFile("config.txt");
+    ifstream configFile(config_file);
     if (!configFile) {
         perror("Failed to open config.txt");
         exit(1);
     }
     string line, source, destination;
     int workers_count = 0;
-    while (getline(configFile, line) && workers_count < MAX) {
+    while (getline(configFile, line) && workers_count < worker_limit) {
         istringstream iss(line);
         iss >> source >> destination;
         cout << "Source: " << source << ", Destination: " << destination << endl;
@@ -95,13 +120,43 @@ int main() {
     }
 
 
+    //after reading thr config and  adding the watchers now its time to start the initial sync
+    for (auto it=sync_info_mem_store.begin() ; it!= sync_info_mem_store.end() ; ++it) {
+        int pipe_fd[2];
+        //create a pipe
+        if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
+
+        pid_t workerpid;
+        workerpid = fork();
+        workers_count++;
+        if (workerpid == -1) {
+            perror("Failed to fork");
+            exit(1);
+        }
+
+        if(workerpid == 0) { // Child process
+            close(pipe_fd[READ]);   //child is for writing 
+            //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
+            dup2(pipe_fd[WRITE], 1);
+            close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+
+            //exec the worker
+            //printf("I am the child process with PID: %lu\n", (long)getpid());
+
+        } else {    // Parent process
+            close(pipe_fd[WRITE]);
+            printf("I am the parent process with PID: %lu\n", (long)getpid());
+        }
+
+    }
+
 
     /*
     for (auto it=sync_info_mem_store.begin() ; it !=sync_info_mem_store.end() ; ++it) {
         cout << it->second->source << " " << it->second->destination << endl;
     }*/
 
-        pid_t childpid;
+      /*  pid_t childpid;
         childpid = fork();
         workers_count++;
         if (childpid == -1) {
@@ -113,6 +168,6 @@ int main() {
             printf("I am the child process with PID: %lu\n", (long)getpid());
         } else {    // Parent process
             printf("I am the parent process with PID: %lu\n", (long)getpid());
-        }
+        }*/
     return 0;
 }
