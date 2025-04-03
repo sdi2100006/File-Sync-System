@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     }
     string line, source, destination;
     int workers_count = 0;
-    while (getline(configFile, line) && workers_count < worker_limit) {
+    while (getline(configFile, line)) {
         istringstream iss(line);
         iss >> source >> destination;
         cout << "Source: " << source << ", Destination: " << destination << endl;
@@ -133,18 +133,28 @@ int main(int argc, char* argv[]) {
             perror("Failed to fork");
             exit(1);
         }
-
         if(workerpid == 0) { // Child process
             close(pipe_fd[READ]);   //child is for writing 
             //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
-            dup2(pipe_fd[WRITE], 1);
-            close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+            //dup2(pipe_fd[WRITE], 1);
+            //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
 
             //exec the worker
+            cout << "starting exec" << endl;
+            int retval = execl("./worker", "./worker", it->second->source.c_str(), it->second->destination.c_str(), "ALL", "FULL", NULL);
+            if(retval == -1) {
+                perror("execl");
+                exit(1);
+            }
+
             //printf("I am the child process with PID: %lu\n", (long)getpid());
 
         } else {    // Parent process
             close(pipe_fd[WRITE]);
+
+            wait(NULL);
+            //read(); should read from the pipe the report the child sends.
+            //should also probably wait for the child ?? NOT SURE 
             printf("I am the parent process with PID: %lu\n", (long)getpid());
         }
 
