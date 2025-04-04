@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
     int fd_fss_in, fd_fss_out;
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
-    queue<string> jobs_queue;
+    queue< pair<string, string> > jobs_queue;
 
     //read from command line 
     int opt, worker_limit=5;
@@ -87,7 +87,6 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
     string line, source, destination;
-    int workers_count = 0;
     while (getline(configFile, line)) {
         istringstream iss(line);
         iss >> source >> destination;
@@ -100,8 +99,10 @@ int main(int argc, char* argv[]) {
         sync_info_struct_ptr->status = "starting";
         sync_info_struct_ptr->active = true;
         sync_info_struct_ptr->last_sync_time=0;
+            
         /*Put the sruct pointer containing info about the directory in the hash map*/
         sync_info_mem_store[source] = sync_info_struct_ptr;
+
     }
 
     //start the inotify thing 
@@ -121,14 +122,23 @@ int main(int argc, char* argv[]) {
 
 
     //after reading thr config and  adding the watchers now its time to start the initial sync
+    int workers_count = 0;
     for (auto it=sync_info_mem_store.begin() ; it!= sync_info_mem_store.end() ; ++it) {
+
+        if (workers_count >= worker_limit) {    //no space for new worker creation. 
+            //put in queue
+            jobs_queue.push({it->second->source, it->second->destination});
+            continue;
+        }
+
+        workers_count++;
         int pipe_fd[2];
         //create a pipe
         if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
 
         pid_t workerpid;
+
         workerpid = fork();
-        workers_count++;
         if (workerpid == -1) {
             perror("Failed to fork");
             exit(1);
