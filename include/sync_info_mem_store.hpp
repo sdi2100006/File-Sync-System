@@ -9,7 +9,7 @@ typedef struct sync_info {
     string source;
     string destination;
     string status ;
-    int last_sync_time;
+    char last_sync_time[20];
     bool active;
     int error_count;
     int wd;

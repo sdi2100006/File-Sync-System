@@ -15,6 +15,7 @@
 #include "../include/sync_info_mem_store.hpp"
 #include <queue>
 #include <sys/inotify.h>
+#include <time.h>
 
 
 #define MAX 5
@@ -23,12 +24,25 @@
 
 using namespace std;
 
+char* get_current_time();
+
+void termination_signal_handler (int signum) {
+
+    int status;
+    while (waitpid(-1, &status, WNOHANG) > 0) {
+        cout << "process ended" << endl;
+    }
+
+}
+
 int main(int argc, char* argv[]) {
 
     int fd_fss_in, fd_fss_out;
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
     queue< pair<string, string> > jobs_queue;
+
+    signal(SIGCHLD, termination_signal_handler);
 
     //read from command line 
     int opt, worker_limit=5;
@@ -52,7 +66,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    cout << manager_logfile << " " << config_file << " " << worker_limit << endl;
+   // cout << manager_logfile << " " << config_file << " " << worker_limit << endl;
 
 
 
@@ -90,18 +104,18 @@ int main(int argc, char* argv[]) {
     while (getline(configFile, line)) {
         istringstream iss(line);
         iss >> source >> destination;
-        cout << "Source: " << source << ", Destination: " << destination << endl;
+        //cout << "Source: " << source << ", Destination: " << destination << endl;
 
         /*Making a new struct to keep info about this directory*/
         sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
         sync_info_struct_ptr->source = source;
         sync_info_struct_ptr->destination = destination;
-        sync_info_struct_ptr->status = "starting";
         sync_info_struct_ptr->active = true;
-        sync_info_struct_ptr->last_sync_time=0;
+        //sync_info_struct_ptr->last_sync_time=NULL;
             
         /*Put the sruct pointer containing info about the directory in the hash map*/
         sync_info_mem_store[source] = sync_info_struct_ptr;
+        jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
 
     }
 
@@ -123,6 +137,67 @@ int main(int argc, char* argv[]) {
 
     //after reading thr config and  adding the watchers now its time to start the initial sync
     int workers_count = 0;
+    while (!jobs_queue.empty()) {
+        pair <string, string> source_dest;
+        source_dest = jobs_queue.front();
+        jobs_queue.pop();
+
+        if (workers_count >= worker_limit) {    //no space for new worker creation. 
+            //put in queue
+            jobs_queue.push({source_dest.first, source_dest.second});
+            continue;
+        }
+
+        int pipe_fd[2];
+        //create a pipe
+        if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
+
+        pid_t workerpid;
+
+        workerpid = fork();
+        if (workerpid == -1) {
+            perror("Failed to fork");
+            exit(1);
+        }
+        if(workerpid == 0) { // Child process
+
+            close(pipe_fd[READ]);   //child is for writing 
+            //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
+            dup2(pipe_fd[WRITE], 1);
+            //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+            //exec the worker
+            //cout << "starting exec" << endl;
+            int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
+            if(retval == -1) {
+                perror("execl");
+                exit(1);
+            }
+
+        } else {    // Parent process
+            close(pipe_fd[WRITE]);
+            workers_count++;
+            //[yyyy-mm-dd 10:00:01] Added directory: /home/user/docs -> /backup/docs
+            //get time 
+            char* timestamp = get_current_time();
+            cout << "[" << timestamp << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
+            cout << "[" << timestamp << "]" << "Monitoring started for " << source_dest.first << endl;
+            sync_info_mem_store[source_dest.first]->active = true;
+            strcpy(sync_info_mem_store[source_dest.first]->last_sync_time, timestamp);
+
+
+            select(); //to get from wich pipe i have to read
+            read(); //read the exec report from that pipe
+
+            //renew the sync_info_mem_store data structure with the information from the read()
+
+        }  
+
+
+
+
+    }
+
+    /*
     for (auto it=sync_info_mem_store.begin() ; it!= sync_info_mem_store.end() ; ++it) {
 
         if (workers_count >= worker_limit) {    //no space for new worker creation. 
@@ -168,7 +243,7 @@ int main(int argc, char* argv[]) {
             printf("I am the parent process with PID: %lu\n", (long)getpid());
         }
 
-    }
+    } */
 
 
     /*
@@ -190,4 +265,17 @@ int main(int argc, char* argv[]) {
             printf("I am the parent process with PID: %lu\n", (long)getpid());
         }*/
     return 0;
+}
+
+
+char* get_current_time () {
+    time_t raw_time;
+    struct tm *time_info;
+    static char formatted_time[20];
+
+    time(&raw_time);
+    time_info = localtime(&raw_time);
+    strftime(formatted_time, sizeof(formatted_time), "%F %T", time_info);
+
+    return formatted_time;
 }
