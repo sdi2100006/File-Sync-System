@@ -17,7 +17,7 @@
 #include <sys/inotify.h>
 #include <time.h>
 #include <poll.h>
-
+#include "../include/utilities.hpp"
 
 #define READ 0
 #define WRITE 1
@@ -25,9 +25,9 @@
 using namespace std;
 
 volatile sig_atomic_t terminated_workers;
-
+/*
 char* get_current_time();
-int get_random_index(int);
+int get_random_index(int);*/
 
 void termination_signal_handler (int signum) {
 
@@ -133,21 +133,25 @@ int main(int argc, char* argv[]) {
     }
 
     //start the initial sync
-    int poll_ready, workers_count=0 , pipe_descriptor_table[worker_limit];
-    pollfd poll_fds[worker_limit];  
-    for (int i=0 ; i<worker_limit ; i++) {  //initialize
+    int poll_ready, workers_count=0;
+    pollfd poll_fds[worker_limit]={0};  
+    /*for (int i=0 ; i<worker_limit ; i++) {  //initialize
         poll_fds[i].fd = -1;
         poll_fds[i].events = -1;
         poll_fds[i].revents = -1;
-    }
-
+    }*/
+    //cout << "good" << endl;
     while (!jobs_queue.empty() || workers_count > 0) {  //THIS WILL CHANGE 
 
         while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
             //cout << "workers count: " << workers_count << endl;
             pair <string, string> source_dest = jobs_queue.front();
             jobs_queue.pop();
+            sleep(5);
             //cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
+            cout << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
+            cout << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl; 
+
 
             /*Fork the initial ΜΑΧ_WORKERS*/
             int pipe_fd[2]; //pipe for worker - manager communication
@@ -170,7 +174,7 @@ int main(int argc, char* argv[]) {
                     exit(1);
                 }
             } else {    //parent
-                cout << "started worker with pid: " << workerpid << endl;
+                //cout << "started worker with pid: " << workerpid << endl;
                 close(pipe_fd[WRITE]);  //parent only reads from child
                 int index;
                 for (int j=0 ; j<worker_limit ; j++) {  //find the first available slot in the table 
@@ -202,9 +206,9 @@ int main(int argc, char* argv[]) {
                 buff[s] = '\0';
                 cout << buff << endl;
                 close(poll_fds[i].fd);  //not needed any more, initialize again so another descriptor can be placed in its position
-                poll_fds[i].fd=-1;
-                poll_fds[i].events=-1;
-                poll_fds[i].revents=-1;
+                poll_fds[i].fd=0;
+                poll_fds[i].events=0;
+                poll_fds[i].revents=0;
                 //cout << "emptied the space" << endl;
             }
         }
@@ -217,7 +221,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-
+/*
 char* get_current_time () {
     time_t raw_time;
     struct tm *time_info;
@@ -232,4 +236,4 @@ char* get_current_time () {
 
 int get_random_index(int worker_limit) {
     return rand() % worker_limit;
-}
+}*/
