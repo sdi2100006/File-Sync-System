@@ -19,7 +19,6 @@
 #include <poll.h>
 
 
-#define MAX_WORKERS 3
 #define READ 0
 #define WRITE 1
 
@@ -42,7 +41,8 @@ void termination_signal_handler (int signum) {
 
 int main(int argc, char* argv[]) {
 
-    int fd_fss_in, fd_fss_out;
+    int fd_fss_in, fd_fss_out, opt, worker_limit=5;
+    string manager_logfile, config_file;
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
     queue< pair<string, string> > jobs_queue;
@@ -51,10 +51,6 @@ int main(int argc, char* argv[]) {
     srand(time(NULL));
 
     //read from command line 
-    int opt, worker_limit=5;
-    string manager_logfile, config_file;
-    
-
     while ((opt = getopt(argc, argv, "l:c:n:")) != -1) {
         switch (opt) {
             case 'l':
@@ -71,10 +67,6 @@ int main(int argc, char* argv[]) {
                 exit(1);
         }
     }
-
-   // cout << manager_logfile << " " << config_file << " " << worker_limit << endl;
-
-
 
     //create 2 named pipes (fss_in and fss_out) to communincate with fss_console
     //create fss_in for reading 
@@ -140,88 +132,88 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    //start the initial sync
+    int poll_ready, workers_count=0 , pipe_descriptor_table[worker_limit];
+    pollfd poll_fds[worker_limit];  
+    for (int i=0 ; i<worker_limit ; i++) {  //initialize
+        poll_fds[i].fd = -1;
+        poll_fds[i].events = -1;
+        poll_fds[i].revents = -1;
+    }
 
-    //after reading thr config and  adding the watchers now its time to start the initial sync
-    //fd_set readfds;
-    int workers_count = 0;
-    int poll_ready;
-    int pipe_descriptor_table[worker_limit];
-    pollfd poll_fds[worker_limit] = {0};   //KEEP THE MAX_WORKER FDS 
-    while (/*!jobs_queue.empty() || workers_count > 0*/ true) {
-        while (!jobs_queue.empty() && workers_count < worker_limit) {
-            cout << "workers count: " << workers_count << endl;
-            pair <string, string> source_dest;
-            source_dest = jobs_queue.front();
+    while (!jobs_queue.empty() || workers_count > 0) {  //THIS WILL CHANGE 
+
+        while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
+            //cout << "workers count: " << workers_count << endl;
+            pair <string, string> source_dest = jobs_queue.front();
             jobs_queue.pop();
-            cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
+            //cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
 
             /*Fork the initial ΜΑΧ_WORKERS*/
-                /*start workers*/
-                int pipe_fd[2]; //pipe for worker - manager communication
-                if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
-                pipe_descriptor_table[workers_count] = pipe_fd[READ]; //keep the read end of the active pipes
+            int pipe_fd[2]; //pipe for worker - manager communication
+            if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
+            //pipe_descriptor_table[workers_count] = pipe_fd[READ]; //keep the read end of the active pipes
 
-                pid_t workerpid;
-                workerpid = fork();
-                if (workerpid == -1) {
-                    perror("Failed to fork");
+            pid_t workerpid;
+            workerpid = fork();
+            if (workerpid == -1) {
+                perror("Failed to fork");
+                exit(1);
+            }
+            if (workerpid == 0) {   //child
+                close(pipe_fd[READ]);   //child is only writing
+                dup2(pipe_fd[WRITE], 1);    //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
+                //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+                int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
+                if(retval == -1) {
+                    perror("execl");
                     exit(1);
                 }
-                if (workerpid == 0) {   //child
-                    close(pipe_fd[READ]);   //child is only writing
-                    dup2(pipe_fd[WRITE], 1);    //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
-                    //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
-                    int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
-                    if(retval == -1) {
-                        perror("execl");
-                        exit(1);
+            } else {    //parent
+                cout << "started worker with pid: " << workerpid << endl;
+                close(pipe_fd[WRITE]);  //parent only reads from child
+                int index;
+                for (int j=0 ; j<worker_limit ; j++) {  //find the first available slot in the table 
+                    if (poll_fds[j].fd == 0) {
+                        index = j;
+                        break;
                     }
-                } else {    //parent
-                    cout << "started worker with pid: " << workerpid << endl;
-                    close(pipe_fd[WRITE]);  //parent only reads from child
-                    int index;
-                    for (int j=0 ; j<worker_limit ; j++) {
-                        if (poll_fds[j].fd == 0) {
-                            index = j;
-                            break;
-                        }
-                    }
-                    poll_fds[index].fd = pipe_fd[READ]; //add the pipe fd in poll for monitoring 
-                    poll_fds[index].events = POLLIN;    //monitor only if a fd is ready for reading 
-                    workers_count++;
-                }   
+                }
+                poll_fds[index].fd = pipe_fd[READ]; //add the pipe fd in poll for monitoring 
+                poll_fds[index].events = POLLIN;    //monitor only if a fd is ready for reading 
+                workers_count++;
+            }   
         }
-                int poll_ready = poll(poll_fds, worker_limit, 100);
-                if (poll_ready == -1) {
-                    if (errno == EINTR) {
-                        continue;
-                    } else {
-                        perror("poll");
-                        exit(1);
-                    }
-                }
-                for (int i=0 ; i<worker_limit; i++) {
-                    if (poll_fds[i].revents & POLLIN) {
-                        char buff[256];
-                        cout << "reading ..." << endl;
-                        ssize_t s = read(poll_fds[i].fd, buff, sizeof(buff));
-                        buff[s] = '\0';
-                        cout << buff << endl;
-                        close(poll_fds[i].fd);
-                        poll_fds[i].fd=0;
-                        poll_fds[i].events=0;
-                        poll_fds[i].revents=0;
-                        cout << "emptied the space" << endl;
-                    }
-                }
-                if (terminated_workers > 0) {
-                    workers_count -= terminated_workers;
-                    terminated_workers = 0;
-                }
 
-        
+        int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll
+        if (poll_ready == -1) {
+            if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
+                continue;
+            } else {
+                perror("poll");
+                exit(1);
+            }
+        }
+        for (int i=0 ; i<worker_limit; i++) {   //loop through all the fds and read if someone is ready
+            if (poll_fds[i].revents & POLLIN) {
+                char buff[256];
+                //cout << "reading ..." << endl;
+                ssize_t s = read(poll_fds[i].fd, buff, sizeof(buff));
+                buff[s] = '\0';
+                cout << buff << endl;
+                close(poll_fds[i].fd);  //not needed any more, initialize again so another descriptor can be placed in its position
+                poll_fds[i].fd=-1;
+                poll_fds[i].events=-1;
+                poll_fds[i].revents=-1;
+                //cout << "emptied the space" << endl;
+            }
+        }
+        if (terminated_workers > 0) {   //from the signal handler
+            workers_count -= terminated_workers;
+            terminated_workers = 0;     //reset the flag
+        }
     }
-    cout << workers_count << endl;
+    //cout << workers_count << endl;
     return 0;
 }
 
