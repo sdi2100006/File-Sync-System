@@ -16,21 +16,25 @@
 #include <queue>
 #include <sys/inotify.h>
 #include <time.h>
+#include <poll.h>
 
 
-#define MAX 5
+#define MAX_WORKERS 3
 #define READ 0
 #define WRITE 1
 
 using namespace std;
+
+volatile sig_atomic_t workers_count=0;
 
 char* get_current_time();
 
 void termination_signal_handler (int signum) {
 
     int status;
-    while (waitpid(-1, &status, WNOHANG) > 0) {
-        cout << "process ended" << endl;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        workers_count--;
     }
 
 }
@@ -136,134 +140,69 @@ int main(int argc, char* argv[]) {
 
 
     //after reading thr config and  adding the watchers now its time to start the initial sync
-    int workers_count = 0;
-    while (!jobs_queue.empty()) {
+    //fd_set readfds;
+    int poll_ready;
+    int pipe_descriptor_table[MAX_WORKERS];
+    pollfd poll_fds[MAX_WORKERS] = {0};   //KEEP THE MAX_WORKER FDS 
+
+    while (!jobs_queue.empty() && workers_count < MAX_WORKERS) {
         pair <string, string> source_dest;
         source_dest = jobs_queue.front();
         jobs_queue.pop();
 
-        if (workers_count >= worker_limit) {    //no space for new worker creation. 
-            //put in queue
-            jobs_queue.push({source_dest.first, source_dest.second});
-            continue;
-        }
+        /*Fork the initial ΜΑΧ_WORKERS*/
+        //while (workers_count < MAX_WORKERS) {
+            /*start workers*/
+            int pipe_fd[2]; //pipe for worker - manager communication
+            if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
+            pipe_descriptor_table[workers_count] = pipe_fd[READ]; //keep the read end of the active pipes
 
-        int pipe_fd[2];
-        //create a pipe
-        if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
-
-        pid_t workerpid;
-
-        workerpid = fork();
-        if (workerpid == -1) {
-            perror("Failed to fork");
-            exit(1);
-        }
-        if(workerpid == 0) { // Child process
-
-            close(pipe_fd[READ]);   //child is for writing 
-            //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
-            dup2(pipe_fd[WRITE], 1);
-            //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
-            //exec the worker
-            //cout << "starting exec" << endl;
-            int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
-            if(retval == -1) {
-                perror("execl");
+            pid_t workerpid;
+            workerpid = fork();
+            if (workerpid == -1) {
+                perror("Failed to fork");
                 exit(1);
             }
+            if (workerpid == 0) {   //child
 
-        } else {    // Parent process
-            close(pipe_fd[WRITE]);
-            workers_count++;
-            //[yyyy-mm-dd 10:00:01] Added directory: /home/user/docs -> /backup/docs
-            //get time 
-            char* timestamp = get_current_time();
-            cout << "[" << timestamp << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
-            cout << "[" << timestamp << "]" << "Monitoring started for " << source_dest.first << endl;
-            sync_info_mem_store[source_dest.first]->active = true;
-            strcpy(sync_info_mem_store[source_dest.first]->last_sync_time, timestamp);
+                close(pipe_fd[READ]);   //child is only writing
+                dup2(pipe_fd[WRITE], 1);    //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
+                //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+                int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
+                if(retval == -1) {
+                    perror("execl");
+                    exit(1);
+                }
+            } else {    //parent
+                cout << "started worker with pid: " << workerpid << endl;
+                close(pipe_fd[WRITE]);  //parent only reads from child
+                poll_fds[workers_count].fd = pipe_fd[READ]; //add the pipe fd in poll for monitoring 
+                poll_fds[workers_count].events = POLLIN;    //monitor only if a fd is ready for reading 
+                workers_count++;
+            }   
+        //}
 
-
-            select(); //to get from wich pipe i have to read
-            read(); //read the exec report from that pipe
-
-            //renew the sync_info_mem_store data structure with the information from the read()
-
-        }  
-
-
-
+        //use poll instead in this same loop. 
+            poll_ready = poll(poll_fds, workers_count, 0);
+            if (poll_ready == -1) {
+                if (errno == EINTR) {
+                    continue;
+                } else {
+                    perror("poll");
+                    exit(1);
+                }
+            }
+            for (int i=0 ; i<workers_count ; i++) {
+                if (poll_fds[i].revents & POLLIN) {
+                    char buff[256];
+                    ssize_t s = read(poll_fds[i].fd, buff, sizeof(buff));
+                    buff[s] = '\0';
+                    cout << buff << endl;
+                }
+            }
 
     }
-
-    /*
-    for (auto it=sync_info_mem_store.begin() ; it!= sync_info_mem_store.end() ; ++it) {
-
-        if (workers_count >= worker_limit) {    //no space for new worker creation. 
-            //put in queue
-            jobs_queue.push({it->second->source, it->second->destination});
-            continue;
-        }
-
-        workers_count++;
-        int pipe_fd[2];
-        //create a pipe
-        if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
-
-        pid_t workerpid;
-
-        workerpid = fork();
-        if (workerpid == -1) {
-            perror("Failed to fork");
-            exit(1);
-        }
-        if(workerpid == 0) { // Child process
-            close(pipe_fd[READ]);   //child is for writing 
-            //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
-            //dup2(pipe_fd[WRITE], 1);
-            //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
-
-            //exec the worker
-            cout << "starting exec" << endl;
-            int retval = execl("./worker", "./worker", it->second->source.c_str(), it->second->destination.c_str(), "ALL", "FULL", NULL);
-            if(retval == -1) {
-                perror("execl");
-                exit(1);
-            }
-
-            //printf("I am the child process with PID: %lu\n", (long)getpid());
-
-        } else {    // Parent process
-            close(pipe_fd[WRITE]);
-
-            wait(NULL);
-            //read(); should read from the pipe the report the child sends.
-            //should also probably wait for the child ?? NOT SURE 
-            printf("I am the parent process with PID: %lu\n", (long)getpid());
-        }
-
-    } */
-
-
-    /*
-    for (auto it=sync_info_mem_store.begin() ; it !=sync_info_mem_store.end() ; ++it) {
-        cout << it->second->source << " " << it->second->destination << endl;
-    }*/
-
-      /*  pid_t childpid;
-        childpid = fork();
-        workers_count++;
-        if (childpid == -1) {
-            perror("Failed to fork");
-            exit(1);
-        }
-
-        if(childpid == 0) { // Child process
-            printf("I am the child process with PID: %lu\n", (long)getpid());
-        } else {    // Parent process
-            printf("I am the parent process with PID: %lu\n", (long)getpid());
-        }*/
+    cout << workers_count << endl;
     return 0;
 }
 
