@@ -27,24 +27,29 @@ using namespace std;
 //copy file name1 to file name2
 int copy_file(const char* name1, const char* name2, char* report_buffer, int &chars_written) {
     int infile, outfile;
-    ssize_t nread;
+    size_t nread;
     char buffer[BUFFSIZE];
 
     //checks
     if ( (infile=open(name1, O_RDONLY)) == -1) {
         chars_written += snprintf(report_buffer+chars_written, REPORT_BUFFSIZE-chars_written, "Cant't open file '%s' %s\n", name1, strerror(errno));
+        perror("infile");
+        exit(-2);
     }
     if ( (outfile=open(name2, O_WRONLY|O_CREAT|O_TRUNC, PERM)) == -1) {
         chars_written += snprintf(report_buffer+chars_written, REPORT_BUFFSIZE-chars_written, "Cant't open file '%s' %s\n", name1, strerror(errno));
+        perror("outfile");
+        exit(-2);
     }
     //now we have both files open
-
+    //cout << "opened" <<  endl;
     while ( (nread=read(infile, buffer, BUFFSIZE)) > 0) {
         if ( write(outfile, buffer, nread) < nread) {
             close(infile);
             close(outfile);
             return -3;
         }
+        ///cout << "shit" << endl;
     }
     
     close(infile);
@@ -73,8 +78,9 @@ vector<char*> parse_directory(const char dirname[], char* report_buffer, int &ch
             if ( strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0 )
                 continue;
 
-            //cout << "inode: " << direntp->d_ino << " name: " << direntp->d_name << endl; 
-            files.push_back(direntp->d_name);
+            char* file;
+
+            files.push_back(strdup(direntp->d_name));   //insert a duplacate of d_name i need to free them after SOS!!!
         }
         closedir(dir_ptr);
     }
@@ -89,6 +95,9 @@ int main(int argc, char *argv[]) {
     char* filename = argv[3]; //if we want a full sync  it should be ALL
     char* operation = argv[4]; //FULL, ADDED, MODIFIED, DELETED
 
+    int copied_count = 0;
+    int skipped_count = 0;
+
     char report_buffer[REPORT_BUFFSIZE];
     int chars_written = 0;
     report_buffer[0]='\0';
@@ -96,26 +105,24 @@ int main(int argc, char *argv[]) {
     if ( strcmp(operation, "FULL") == 0 ) {
         //parse the directory and call copy for every file.
         vector<char*> file_names = parse_directory(source, report_buffer, chars_written); //returns the file names of the directory in the vector
-        /*for (int i=0 ; i<file_names.size() ; i++) {
-            cout << file_names[i] << " ";
-        }*/
-        //cout << endl;
 
         for (int i=0 ; i<file_names.size() ; i++) {
-            //char *temp_str;
-            char source_temp_str[50];
-            char dest_temp_str[50];
+
+            char* source_temp_str = (char*)malloc( (strlen(source) + strlen(file_names[i]) + 2) * sizeof(char));
+            char* dest_temp_str = (char*)malloc( (strlen(destination) + strlen(file_names[i]) + 2) * sizeof(char));
 
             //cool solution to concat 2 strings because segfault with strcat I HAVE FUCKED UP WITH STRINGS AND CHAR*
-            snprintf(source_temp_str, sizeof(source_temp_str), "%s/%s", source, file_names[i]);
-            snprintf(dest_temp_str, sizeof(dest_temp_str), "%s/%s", destination, file_names[i]);
-            
-            //cout << "temp_str " << source_temp_str <<endl;
-            //cout << "dest_str " << dest_temp_str <<endl;
+            snprintf(source_temp_str, strlen(source) + strlen(file_names[i]) + 2, "%s/%s", source, file_names[i]);
+            snprintf(dest_temp_str, strlen(destination) + strlen(file_names[i]) + 2, "%s/%s", destination, file_names[i]);
+            //cout << "dest_temp_str: " << dest_temp_str << endl;
+            //cout << "source_temp_str" << source_temp_str << endl;
 
             if( copy_file(source_temp_str, dest_temp_str, report_buffer, chars_written) != 0 ) { 
-                perror("FULL: copy_file");
-                exit(1);
+                skipped_count++;
+                perror("copy error: ");
+                //strerror();
+            } else {
+                copied_count++;
             }
         }
  
@@ -132,7 +139,7 @@ int main(int argc, char *argv[]) {
         //do deleted
     }
 
-    cout << "I am DOOOONEEEEE with pid: " << getpid() << endl;
+    cout << "I am DOOOONEEEEE with pid: " << getpid() << " ," << copied_count << "files copied" << " ," << skipped_count << " files skippedd" << endl;
     cout.flush();
     exit(0);
 

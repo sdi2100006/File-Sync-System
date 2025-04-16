@@ -14,7 +14,7 @@ char* get_current_time () {
     time(&raw_time);
     time_info = localtime(&raw_time);
     strftime(formatted_time, sizeof(formatted_time), "%F %T", time_info);
-    cout << "DEBUG: " << formatted_time << endl;
+    //cout << "DEBUG: " << formatted_time << endl;
     return formatted_time;
 }
 

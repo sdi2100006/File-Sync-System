@@ -147,7 +147,6 @@ int main(int argc, char* argv[]) {
             //cout << "workers count: " << workers_count << endl;
             pair <string, string> source_dest = jobs_queue.front();
             jobs_queue.pop();
-            sleep(5);
             //cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
             cout << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
             cout << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl; 
@@ -172,6 +171,8 @@ int main(int argc, char* argv[]) {
                 if(retval == -1) {
                     perror("execl");
                     exit(1);
+                } else {
+                    //cout << "oook" << endl;
                 }
             } else {    //parent
                 //cout << "started worker with pid: " << workerpid << endl;
@@ -188,7 +189,7 @@ int main(int argc, char* argv[]) {
                 workers_count++;
             }   
         }
-
+        //cout <<"sdvff" << endl;
         int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll
         if (poll_ready == -1) {
             if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
