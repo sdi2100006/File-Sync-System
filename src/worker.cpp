@@ -16,6 +16,7 @@
 #include <queue>
 #include <sys/inotify.h>
 #include <dirent.h>
+#include "../include/utilities.hpp"
 
 using namespace std;
 
@@ -98,10 +99,19 @@ int main(int argc, char *argv[]) {
     int copied_count = 0;
     int skipped_count = 0;
 
-    char report_buffer[REPORT_BUFFSIZE];
     int chars_written = 0;
-    report_buffer[0]='\0';
 
+
+    //start the exec report
+    char* timestamp = get_current_time();
+    pid_t  pid = getpid();
+    int buffer_size = snprintf(NULL, 0, "TIMESTAMP: %s\nSOURCE: %s\nDEST: %s\nPID: %d\nOP: %s\n", timestamp, source, destination, pid, operation);
+    char* report_buffer = (char*)malloc(buffer_size);
+    snprintf(report_buffer, buffer_size, "TIMESTAMP: %s\nSOURCE: %s\nDEST: %s\nPID: %d\nOP: %s\n", timestamp, source, destination, pid, operation);
+    //cout << "report buffer\n" << report_buffer << endl;
+
+    char* additional_info;
+    int additional_info_size;
     if ( strcmp(operation, "FULL") == 0 ) {
         //parse the directory and call copy for every file.
         vector<char*> file_names = parse_directory(source, report_buffer, chars_written); //returns the file names of the directory in the vector
@@ -126,6 +136,18 @@ int main(int argc, char *argv[]) {
             }
         }
  
+        if (copied_count == file_names.size() && skipped_count == 0) {
+            additional_info_size = snprintf(NULL, 0, "STATUS: SUCCESS\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            additional_info = (char*)malloc(additional_info_size);
+            snprintf(additional_info, additional_info_size, "STATUS: SUCCESS\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+        } else if (copied_count == 0 && skipped_count == file_names.size()) {
+            //error
+        } else if (copied_count+skipped_count == file_names.size()){
+            //partial
+        } else {
+            //unknown  status
+        }
+ 
     } else if ( strcmp(operation, "ADDED") == 0 ) {
         //copy the requested file to the source directory (if a file with the same name exists ????)
         if( copy_file(filename, destination, report_buffer, chars_written) != 0 ) { 
@@ -138,7 +160,10 @@ int main(int argc, char *argv[]) {
     } else if ( strcmp(operation, "DELETED") == 0) {
         //do deleted
     }
-
+    report_buffer = (char*)realloc(report_buffer, buffer_size+additional_info_size);
+    strcat(report_buffer,"\n");
+    strcat(report_buffer, additional_info);
+    cout << "REPORT\n" << report_buffer << endl;
     cout << "I am DOOOONEEEEE with pid: " << getpid() << " ," << copied_count << "files copied" << " ," << skipped_count << " files skippedd" << endl;
     cout.flush();
     exit(0);
