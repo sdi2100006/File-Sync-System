@@ -34,13 +34,13 @@ int copy_file(const char* name1, const char* name2, char* error_buffer) {
     //checks
     if ( (infile=open(name1, O_RDONLY)) == -1) {
         snprintf(error_buffer, ERROR_SIZE, " - Can't open source file '%s' %s", name1, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
+        //cout << "error_buffer: " << error_buffer << endl;
         return -5;
         exit(-2);
     }
     if ( (outfile=open(name2, O_WRONLY|O_CREAT|O_TRUNC, PERM)) == -1) {
         snprintf(error_buffer, ERROR_SIZE, " - Can't open dest file '%s', %s", name2, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
+        //cout << "error_buffer: " << error_buffer << endl;
         return -5;
         exit(-2);
     }
@@ -50,7 +50,7 @@ int copy_file(const char* name1, const char* name2, char* error_buffer) {
             close(infile);
             close(outfile);
             snprintf(error_buffer, ERROR_SIZE, " - error writing to file '%s', %s", name2, strerror(errno));
-            cout << "error_buffer: " << error_buffer << endl;
+            //cout << "error_buffer: " << error_buffer << endl;
             return -3;
         }
         ///cout << "shit" << endl;
@@ -61,7 +61,7 @@ int copy_file(const char* name1, const char* name2, char* error_buffer) {
 
     if (nread == -1) {
         snprintf(error_buffer, ERROR_SIZE, " - error reading file '%s'. %s", name1, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
+        //cout << "error_buffer: " << error_buffer << endl;
         return -4;
     } else {
         return 0;
@@ -106,9 +106,9 @@ int main(int argc, char *argv[]) {
     //start the exec report
     char* timestamp = get_current_time();
     pid_t  pid = getpid();
-    int report_buffer_size = snprintf(NULL, 0, "TIMESTAMP: %s\nSOURCE: %s\nDEST: %s\nPID: %d\nOP: %s\n", timestamp, source, destination, pid, operation);
+    int report_buffer_size = snprintf(NULL, 0, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s\n", timestamp, source, destination, pid, operation);
     char* report_buffer = (char*)malloc(report_buffer_size);
-    snprintf(report_buffer, report_buffer_size, "TIMESTAMP: %s\nSOURCE: %s\nDEST: %s\nPID: %d\nOP: %s\n", timestamp, source, destination, pid, operation);
+    snprintf(report_buffer, report_buffer_size, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s\n", timestamp, source, destination, pid, operation);
 
     char* additional_info;
     int additional_info_size;
@@ -140,21 +140,21 @@ int main(int argc, char *argv[]) {
         }
  
         if (copied_count == file_names.size() && skipped_count == 0) {  //STATUS: succes
-            additional_info_size = snprintf(NULL, 0, "STATUS: SUCCESS\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            additional_info_size = snprintf(NULL, 0, "STATUS=SUCCESS\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: SUCCESS\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            snprintf(additional_info, additional_info_size, "STATUS=SUCCESS\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
         } else if (copied_count == 0 && skipped_count == file_names.size()) {   //STATUS: error
-            additional_info_size = snprintf(NULL, 0, "STATUS: ERROR\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            additional_info_size = snprintf(NULL, 0, "STATUS=ERROR\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));  
-            snprintf(additional_info, additional_info_size, "STATUS: ERROR\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            snprintf(additional_info, additional_info_size, "STATUS=ERROR\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
         } else if (copied_count+skipped_count == file_names.size()){    //STATUS: partial
-            additional_info_size = snprintf(NULL, 0, "STATUS: PARTIAL\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            additional_info_size = snprintf(NULL, 0, "STATUS=PARTIAL\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: PARTIAL\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            snprintf(additional_info, additional_info_size, "STATUS=PARTIAL\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
         } else {    //STATUS: unknown 
-            additional_info_size = snprintf(NULL, 0, "STATUS: UNKNOWN\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            additional_info_size = snprintf(NULL, 0, "STATUS=UNKNOWN\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: UNKNOWN\nERRORS: %d files copied, %d skipped\n", copied_count, skipped_count);
+            snprintf(additional_info, additional_info_size, "STATUS=UNKNOWN\nERRORS=%d files copied, %d skipped\n", copied_count, skipped_count);
         }
 
         for (int i=0 ; i<file_names.size() ; i++) {
@@ -176,13 +176,13 @@ int main(int argc, char *argv[]) {
             perror("ADD: copy_file");
         }
         if (code < 0) {
-            additional_info_size = snprintf(NULL, 0, "STATUS: ERROR\nERRORS: FILE: %s%s\n",filename, error_buffer);
+            additional_info_size = snprintf(NULL, 0, "STATUS=ERROR\nERRORS=FILE: %s%s\n",filename, error_buffer);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: ERROR\nERRORS: FILE: %s%s\n", filename, error_buffer);
+            snprintf(additional_info, additional_info_size, "STATUS=ERROR\nERRORS=FILE: %s%s\n", filename, error_buffer);
         } else {
-            additional_info_size = snprintf(NULL, 0, "STATUS: SUCCESS\nERRORS: FILE: %s\n", filename);
+            additional_info_size = snprintf(NULL, 0, "STATUS=SUCCESS\nERRORS=FILE: %s\n", filename);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: SUCCESS\nERRORS: FILE: %s\n", filename);
+            snprintf(additional_info, additional_info_size, "STATUS=SUCCESS\nERRORS=FILE: %s\n", filename);
         }
         
             
@@ -200,13 +200,13 @@ int main(int argc, char *argv[]) {
             perror("ADD: copy_file");
         }
         if (code < 0) {
-            additional_info_size = snprintf(NULL, 0, "STATUS: ERROR\nERRORS: FILE: %s%s\n",filename, error_buffer);
+            additional_info_size = snprintf(NULL, 0, "STATUS=ERROR\nERRORS=FILE: %s%s\n",filename, error_buffer);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: ERROR\nERRORS: FILE: %s%s\n", filename, error_buffer);
+            snprintf(additional_info, additional_info_size, "STATUS=ERROR\nERRORS=FILE: %s%s\n", filename, error_buffer);
         } else {
-            additional_info_size = snprintf(NULL, 0, "STATUS: SUCCESS\nERRORS: FILE: %s\n", filename);
+            additional_info_size = snprintf(NULL, 0, "STATUS=SUCCESS\nERRORS=FILE: %s\n", filename);
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: SUCCESS\nERRORS: FILE: %s\n", filename);
+            snprintf(additional_info, additional_info_size, "STATUS=SUCCESS\nERRORS=FILE: %s\n", filename);
         }
 
 
@@ -217,24 +217,27 @@ int main(int argc, char *argv[]) {
 
         if (unlink(temp_dest) == -1) {
             //log error 
-            additional_info_size = snprintf(NULL, 0, "STATUS: ERROR\nERRORS: FILE: %s - error unlinking file, %s", filename, strerror(errno));
+            additional_info_size = snprintf(NULL, 0, "STATUS=ERROR\nERRORS=FILE: %s - error unlinking file, %s", filename, strerror(errno));
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: ERROR\nERRORS: FILE: %s - error unlinking file, %s", filename, strerror(errno));
+            snprintf(additional_info, additional_info_size, "STATUS=ERROR\nERRORS-FILE: %s - error unlinking file, %s", filename, strerror(errno));
         } else {
             //log success
-            additional_info_size = snprintf(NULL, 0, "STATUS: SUCCESS\nERRORS: FILE: %s - error unlinking file, %s", filename, strerror(errno));
+            additional_info_size = snprintf(NULL, 0, "STATUS=SUCCESS\nERRORS=FILE: %s - error unlinking file, %s", filename, strerror(errno));
             additional_info = (char*)malloc(additional_info_size * sizeof(char));
-            snprintf(additional_info, additional_info_size, "STATUS: SUCCESS\nERRORS: FILE: %s", filename);
+            snprintf(additional_info, additional_info_size, "STATUS=SUCCESS\nERRORS=FILE: %s", filename);
         }
         free(temp_dest);
 
     }
     report_buffer = (char*)realloc(report_buffer, report_buffer_size + 1 + additional_info_size);
-    cout << "strlen: " << strlen(report_buffer) << endl;
+    //cout << "strlen: " << strlen(report_buffer) << endl;
     strcat(report_buffer,"\n");
     strcat(report_buffer, additional_info);
-    cout << "REPORT\n" << report_buffer << endl;
-    cout.flush();
+   
+   
+    cout << report_buffer << endl; //send to pipe
+    cout.flush();   //maybe uselles
+    
     free(additional_info);
     free(report_buffer);
     free(error_buffer);

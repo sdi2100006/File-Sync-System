@@ -21,13 +21,23 @@
 
 #define READ 0
 #define WRITE 1
+#define REPORT_SIZE 256
 
 using namespace std;
 
 volatile sig_atomic_t terminated_workers;
-/*
-char* get_current_time();
-int get_random_index(int);*/
+
+typedef struct report_info{
+    string timestamp;
+    string source;
+    string dest;
+    pid_t pid;
+    string operation;
+    string status;
+    string errors;
+} report_info_struct;
+
+int parse_report(string, report_info_struct&);
 
 void termination_signal_handler (int signum) {
 
@@ -117,6 +127,9 @@ int main(int argc, char* argv[]) {
 
     }
 
+    //create and open  logfile 
+    ofstream logfile(manager_logfile);
+
     //start the inotify thing 
     int inotify_fd = inotify_init();
     if (inotify_fd==-1) {
@@ -149,7 +162,11 @@ int main(int argc, char* argv[]) {
             jobs_queue.pop();
             //cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
             cout << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
-            cout << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl; 
+            logfile << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
+
+            cout << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl;
+            logfile << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl;
+
 
 
             /*Fork the initial ΜΑΧ_WORKERS*/
@@ -201,16 +218,23 @@ int main(int argc, char* argv[]) {
         }
         for (int i=0 ; i<worker_limit; i++) {   //loop through all the fds and read if someone is ready
             if (poll_fds[i].revents & POLLIN) {
-                char buff[256];
-                //cout << "reading ..." << endl;
-                ssize_t s = read(poll_fds[i].fd, buff, sizeof(buff));
-                buff[s] = '\0';
-                cout << buff << endl;
+                char exec_report[REPORT_SIZE];
+                ssize_t s = read(poll_fds[i].fd, exec_report, REPORT_SIZE);
+                //parse the exec report and store values into variables
+                report_info_struct report_info;
+                if (parse_report(exec_report, report_info) < 0) {
+                    perror("parse_report");
+                    exit(-1);
+                }
+                //cout << "REPORT\n" << report_info.timestamp << endl << report_info.source << endl << report_info.dest << endl << report_info.pid << endl << report_info.operation << endl << report_info.status << endl << report_info.errors << endl;
+                logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
+                //renew data structs
+                strcpy(sync_info_mem_store[report_info.source]->last_sync_time, report_info.timestamp.c_str());
+
                 close(poll_fds[i].fd);  //not needed any more, initialize again so another descriptor can be placed in its position
                 poll_fds[i].fd=0;
                 poll_fds[i].events=0;
                 poll_fds[i].revents=0;
-                //cout << "emptied the space" << endl;
             }
         }
         if (terminated_workers > 0) {   //from the signal handler
@@ -218,23 +242,40 @@ int main(int argc, char* argv[]) {
             terminated_workers = 0;     //reset the flag
         }
     }
-    //cout << workers_count << endl;
+    logfile.close();
     return 0;
 }
 
-/*
-char* get_current_time () {
-    time_t raw_time;
-    struct tm *time_info;
-    static char formatted_time[20];
+int parse_report(string exec_report, report_info_struct& report_info) {
 
-    time(&raw_time);
-    time_info = localtime(&raw_time);
-    strftime(formatted_time, sizeof(formatted_time), "%F %T", time_info);
+    string line;
 
-    return formatted_time;
+    istringstream iss(exec_report);
+    char splitter = '=';
+    while(getline(iss, line)) {
+        size_t splitter_pos = line.find(splitter);
+        string key = line.substr(0, splitter_pos);
+        string value = line.substr(splitter_pos+1);
+
+        if (key == "TIMESTAMP") {
+            report_info.timestamp = value;
+        } else if (key == "SOURCE") {
+            report_info.source = value;
+        } else if (key == "DEST") {
+            report_info.dest = value;
+        } else if (key == "PID") {
+            report_info.pid = atoi(value.c_str());
+        } else if (key == "OP") {
+            report_info.operation = value;
+        } else if (key == "STATUS") {
+            report_info.status = value;
+        } else if (key == "ERRORS") {
+            report_info.errors = value;
+        } else {
+            perror("key-value");
+        }
+
+    }
+
+    return 0;
 }
-
-int get_random_index(int worker_limit) {
-    return rand() % worker_limit;
-}*/
