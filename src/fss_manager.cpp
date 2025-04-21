@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
             }   
         }
         //cout <<"sdvff" << endl;
-        int poll_ready = poll(poll_fds, worker_limit, 0); //non blocking poll
+        int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll
         if (poll_ready == -1) {
             if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
                 continue;
