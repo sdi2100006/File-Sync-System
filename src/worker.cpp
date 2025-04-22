@@ -99,6 +99,7 @@ int main(int argc, char *argv[]) {
     char* destination = argv[2];
     char* filename = argv[3]; //if we want a full sync  it should be ALL
     char* operation = argv[4]; //FULL, ADDED, MODIFIED, DELETED
+    //cout << "operation: "<< operation;
 
     int copied_count = 0;
     int skipped_count = 0;
@@ -108,7 +109,8 @@ int main(int argc, char *argv[]) {
     pid_t  pid = getpid();
     int report_buffer_size = snprintf(NULL, 0, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s", timestamp, source, destination, pid, operation);
     char* report_buffer = (char*)malloc(report_buffer_size+1);
-    snprintf(report_buffer, report_buffer_size, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s", timestamp, source, destination, pid, operation);
+    snprintf(report_buffer, report_buffer_size+1, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s", timestamp, source, destination, pid, operation);
+    //cout << "report_buffer:" << report_buffer <<endl;
 
     char* additional_info;
     int additional_info_size;

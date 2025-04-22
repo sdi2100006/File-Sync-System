@@ -27,6 +27,13 @@ using namespace std;
 
 volatile sig_atomic_t terminated_workers;
 
+typedef struct job {
+    string source;
+    string dest;
+    string operation;
+    string filename;
+} job_struct;
+
 typedef struct report_info{
     string timestamp;
     string source;
@@ -55,7 +62,8 @@ int main(int argc, char* argv[]) {
     string manager_logfile, config_file;
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
-    queue< pair<string, string> > jobs_queue;
+    //queue< pair<string, string> > jobs_queue;
+    queue< job_struct > jobs_queue;
 
     signal(SIGCHLD, termination_signal_handler);
     srand(time(NULL));
@@ -123,7 +131,13 @@ int main(int argc, char* argv[]) {
             
         /*Put the sruct pointer containing info about the directory in the hash map*/
         sync_info_mem_store[source] = sync_info_struct_ptr;
-        jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
+        job_struct job;
+        job.source = sync_info_struct_ptr->source;
+        job.dest = sync_info_struct_ptr->destination;
+        job.operation = "FULL";
+        job.filename = "ALL";
+        jobs_queue.push(job);
+        //jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
 
     }
 
@@ -147,25 +161,30 @@ int main(int argc, char* argv[]) {
 
     //start the initial sync
     int poll_ready, workers_count=0;
-    pollfd poll_fds[worker_limit]={0};  
+    pollfd poll_fds[worker_limit]={0};
+    pollfd poll_inotify_fds;
+    poll_inotify_fds.fd = inotify_fd;
+    poll_inotify_fds.events = POLLIN;  
     /*for (int i=0 ; i<worker_limit ; i++) {  //initialize
         poll_fds[i].fd = -1;
         poll_fds[i].events = -1;
         poll_fds[i].revents = -1;
     }*/
     //cout << "good" << endl;
-    while (!jobs_queue.empty() || workers_count > 0) {  //THIS WILL CHANGE 
+    while (/*!jobs_queue.empty() || workers_count > 0*/ true) {  //THIS WILL CHANGE 
 
         while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
             //cout << "workers count: " << workers_count << endl;
-            pair <string, string> source_dest = jobs_queue.front();
+            //pair <string, string> source_dest = jobs_queue.front();
+            job_struct job = jobs_queue.front();
             jobs_queue.pop();
-            //cout << "poped from queue, source: " << source_dest.first << " dest: " << source_dest.second << endl;
-            cout << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
-            logfile << "[" << get_current_time() << "]" << " Added directory: " << source_dest.first << " -> " << source_dest.second << endl;
+            
+            //search if already exists
+            cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
+            logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
 
-            cout << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl;
-            logfile << "[" << get_current_time() << "]" << " Monitoring started for " << source_dest.first << endl;
+            cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+            logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
 
 
 
@@ -173,6 +192,7 @@ int main(int argc, char* argv[]) {
             int pipe_fd[2]; //pipe for worker - manager communication
             if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
             //pipe_descriptor_table[workers_count] = pipe_fd[READ]; //keep the read end of the active pipes
+            //cout << job.source << " " << job.dest << " " << job.filename << " " << job.operation << endl;
 
             pid_t workerpid;
             workerpid = fork();
@@ -183,8 +203,9 @@ int main(int argc, char* argv[]) {
             if (workerpid == 0) {   //child
                 close(pipe_fd[READ]);   //child is only writing
                 dup2(pipe_fd[WRITE], 1);    //redirect stdout to point at the pipe. Now everything that the child prints goes to the pipe 
-                //close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
-                int retval = execl("./worker", "./worker", source_dest.first.c_str(), source_dest.second.c_str(), "ALL", "FULL", NULL);
+                close(pipe_fd[WRITE]); //aparenetly its not needed because of dup2
+                //cout << job.source << " " << job.dest << " " << job.filename << " " << job.operation << endl;
+                int retval = execl("./worker", "./worker", job.source.c_str(), job.dest.c_str(), job.filename.c_str(), job.operation.c_str(), NULL);
                 if(retval == -1) {
                     perror("execl");
                     exit(1);
@@ -237,6 +258,58 @@ int main(int argc, char* argv[]) {
                 poll_fds[i].revents=0;
             }
         }
+
+        //poll for the inotify 
+        int poll_inotify = poll(&poll_inotify_fds, 1, 100);
+        if (poll_inotify == -1) {
+            if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
+                continue;
+            } else {
+                perror("poll");
+                exit(1);
+            }
+        }
+        char inotify_buffer[1024];
+        if (poll_inotify_fds.revents & POLLIN) {    //there is data to read from inotify
+            const struct inotify_event *event;
+            int length = read(inotify_fd, inotify_buffer, 1024);
+            int i=0;
+            while (i < length) {
+                struct inotify_event* event = (struct inotify_event*)&inotify_buffer[i];
+                job_struct new_job;
+                cout << "Event from wd: " << event->wd << "\n";
+                //search sync_info_mem_store to find the wd
+                for (auto it=sync_info_mem_store.begin() ; it != sync_info_mem_store.end() ; ++it) {
+                    if (it->second->wd == event->wd) {
+                        new_job.source = it->first;
+                        cout << "source: " << new_job.source << endl;
+                        new_job.dest = it->second->destination;
+                        cout << "dest: " << new_job.dest << endl;
+                        new_job.filename = event->name;
+                        cout << "filename: " << new_job.filename << endl;
+                    }
+                }
+                if (event->mask & IN_CREATE) {
+                    new_job.operation = "ADDED";
+                    cout << "File created: " << event->name << "\n";
+                } else if (event->mask & IN_MODIFY) {
+                    new_job.operation = "MODIFIED";
+                    cout << "File modified: " << event->name << "\n";
+                } else if (event->mask & IN_DELETE) {
+                    new_job.operation = "DELETED";
+                    cout << "File deleted: " << event->name << "\n";
+                }
+
+                //add the new job to the queue
+                jobs_queue.push(new_job);
+            
+                i += sizeof(struct inotify_event) + event->len;
+            }
+
+        }
+
+
+
         if (terminated_workers > 0) {   //from the signal handler
             workers_count -= terminated_workers;
             terminated_workers = 0;     //reset the flag
