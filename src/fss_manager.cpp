@@ -58,8 +58,9 @@ void termination_signal_handler (int signum) {
 
 int main(int argc, char* argv[]) {
 
-    int fd_fss_in, fd_fss_out, opt, worker_limit=5;
+    int fd_fss_in, fd_fss_out, opt, worker_limit=5, total_jobs=0;
     string manager_logfile, config_file;
+    
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
     //queue< pair<string, string> > jobs_queue;
@@ -178,13 +179,16 @@ int main(int argc, char* argv[]) {
             //pair <string, string> source_dest = jobs_queue.front();
             job_struct job = jobs_queue.front();
             jobs_queue.pop();
+            total_jobs++;
             
             //search if already exists
-            cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
-            logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
-
-            cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
-            logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+            if (job.operation == "FULL") {
+                cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
+                logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
+        
+                cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+                logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+            }
 
 
 
@@ -241,6 +245,8 @@ int main(int argc, char* argv[]) {
             if (poll_fds[i].revents & POLLIN) {
                 char exec_report[REPORT_SIZE];
                 ssize_t s = read(poll_fds[i].fd, exec_report, REPORT_SIZE);
+                //cout << "report: " << exec_report << endl;
+                //cout << "report end" << endl;
                 //parse the exec report and store values into variables
                 report_info_struct report_info;
                 if (parse_report(exec_report, report_info) < 0) {
@@ -277,27 +283,27 @@ int main(int argc, char* argv[]) {
             while (i < length) {
                 struct inotify_event* event = (struct inotify_event*)&inotify_buffer[i];
                 job_struct new_job;
-                cout << "Event from wd: " << event->wd << "\n";
+                //cout << "Event from wd: " << event->wd << "\n";
                 //search sync_info_mem_store to find the wd
                 for (auto it=sync_info_mem_store.begin() ; it != sync_info_mem_store.end() ; ++it) {
                     if (it->second->wd == event->wd) {
                         new_job.source = it->first;
-                        cout << "source: " << new_job.source << endl;
+                        //cout << "source: " << new_job.source << endl;
                         new_job.dest = it->second->destination;
-                        cout << "dest: " << new_job.dest << endl;
+                        //cout << "dest: " << new_job.dest << endl;
                         new_job.filename = event->name;
-                        cout << "filename: " << new_job.filename << endl;
+                        //cout << "filename: " << new_job.filename << endl;
                     }
                 }
                 if (event->mask & IN_CREATE) {
                     new_job.operation = "ADDED";
-                    cout << "File created: " << event->name << "\n";
+                    //cout << "File created: " << event->name << "\n";
                 } else if (event->mask & IN_MODIFY) {
                     new_job.operation = "MODIFIED";
-                    cout << "File modified: " << event->name << "\n";
+                    //cout << "File modified: " << event->name << "\n";
                 } else if (event->mask & IN_DELETE) {
                     new_job.operation = "DELETED";
-                    cout << "File deleted: " << event->name << "\n";
+                    //cout << "File deleted: " << event->name << "\n";
                 }
 
                 //add the new job to the queue
@@ -344,9 +350,10 @@ int parse_report(string exec_report, report_info_struct& report_info) {
             report_info.status = value;
         } else if (key == "ERRORS") {
             report_info.errors = value;
-        } else {
-            perror("key-value");
-        }
+        } /*else {
+            cout << "key: " << key << " value: " << value << endl;
+            perror("key-value\n");
+        }*/
 
     }
 
