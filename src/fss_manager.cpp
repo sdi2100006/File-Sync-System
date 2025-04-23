@@ -32,6 +32,7 @@ typedef struct job {
     string dest;
     string operation;
     string filename;
+    bool fromconsole;
 } job_struct;
 
 typedef struct report_info{
@@ -100,10 +101,12 @@ int main(int argc, char* argv[]) {
     }
 
     //open fss_in for reading *NOT YET*
-    /*if ( (fd_fss_in = open("fss_in", O_RDONLY | O_NONBLOCK) ) < 0) {
+    if ( (fd_fss_in = open("fss_in", O_RDONLY | O_NONBLOCK) ) < 0) {
         perror("Failed to open fss_in");
         exit(1);
-    }*/
+    }
+
+    cout << "fd: " << fd_fss_in << endl;
 
     //open fss_out for writing  **ΝΟΤ ΥΕΤ BECAUSE IT BLOCKS**
     /*if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
@@ -137,6 +140,7 @@ int main(int argc, char* argv[]) {
         job.dest = sync_info_struct_ptr->destination;
         job.operation = "FULL";
         job.filename = "ALL";
+        job.fromconsole = false;
         jobs_queue.push(job);
         //jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
 
@@ -165,7 +169,11 @@ int main(int argc, char* argv[]) {
     pollfd poll_fds[worker_limit]={0};
     pollfd poll_inotify_fds;
     poll_inotify_fds.fd = inotify_fd;
-    poll_inotify_fds.events = POLLIN;  
+    poll_inotify_fds.events = POLLIN; 
+    pollfd poll_console_fds;
+    poll_console_fds.fd = fd_fss_in;
+    cout << "fd_fss_in" << fd_fss_in <<endl;
+    poll_console_fds.events = POLLIN; 
     /*for (int i=0 ; i<worker_limit ; i++) {  //initialize
         poll_fds[i].fd = -1;
         poll_fds[i].events = -1;
@@ -174,23 +182,31 @@ int main(int argc, char* argv[]) {
     //cout << "good" << endl;
     while (/*!jobs_queue.empty() || workers_count > 0*/ true) {  //THIS WILL CHANGE 
 
+        //check if there is something to read from fss_in
+
+        //if there is a command read it 
+        //push a job at the start fo the dequeue 
+        
         while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
-            //cout << "workers count: " << workers_count << endl;
-            //pair <string, string> source_dest = jobs_queue.front();
+
+
             job_struct job = jobs_queue.front();
             jobs_queue.pop();
             total_jobs++;
             
-            //search if already exists
             if (job.operation == "FULL") {
                 cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
                 logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
         
                 cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
                 logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+
+                if (job.fromconsole == true) {
+                    char message[250];
+                    snprintf(message, 250, "[%s] Added directory: %s -> %s\nMonitoring started for %s\n", get_current_time(), job.source.c_str(), job.dest.c_str(), job.source.c_str());
+                    write(fd_fss_out, message, sizeof(message));
+                }
             }
-
-
 
             /*Fork the initial ΜΑΧ_WORKERS*/
             int pipe_fd[2]; //pipe for worker - manager communication
@@ -231,6 +247,8 @@ int main(int argc, char* argv[]) {
                 workers_count++;
             }   
         }
+       // cout << "out" << endl;
+
         //cout <<"sdvff" << endl;
         int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll
         if (poll_ready == -1) {
@@ -314,12 +332,73 @@ int main(int argc, char* argv[]) {
 
         }
 
-
-
         if (terminated_workers > 0) {   //from the signal handler
             workers_count -= terminated_workers;
             terminated_workers = 0;     //reset the flag
         }
+
+        //check for command from console
+
+
+        //poll for the inotify 
+        int poll_console = poll(&poll_console_fds, 1, 100);
+        if (poll_console == -1) {
+            if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
+                continue;
+            } else {
+                perror("poll");
+                exit(1);
+            }
+        }
+        char console_buffer[256];
+        if (poll_console_fds.revents & POLLIN) {
+            cout << "we have data" << endl;
+            ssize_t s = read(fd_fss_in, console_buffer, 256);
+            cout << "reeead" << endl;
+            //handle which command 
+            vector<string> command_parts;
+            string command(console_buffer);
+            cout << "command: " << command << endl;
+            istringstream iss(command);
+            while (iss >> command) {
+                command_parts.push_back(command);
+            }
+
+            if (command_parts[0] == "add") {
+                job_struct new_job;
+                new_job.source = command_parts[1];
+                new_job.dest = command_parts[2];
+                new_job.filename = "ALL";
+                new_job.operation = "FULL";
+                new_job.fromconsole = true;
+
+                //search if the source dir is already in queue
+                if (sync_info_mem_store.find(new_job.source) != sync_info_mem_store.end()) {
+                    char message[256];
+                    snprintf(message, 256, "[%s] Already in queue: %s\n", get_current_time(), new_job.source.c_str());
+                    cout << message << endl;
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_in");
+                        exit(1);
+                    }
+                   ssize_t n = write(fd_fss_out, message, sizeof(message));
+                   if (n<=0) {
+                    cout<< "tipota de egrapsa" << endl;
+                   }
+                    continue;
+                }
+
+                //if you didnt find it 
+                jobs_queue.push(new_job);
+                cout << "pushed" << endl;
+            }
+                
+
+        }
+
+
+
+
     }
     logfile.close();
     return 0;
