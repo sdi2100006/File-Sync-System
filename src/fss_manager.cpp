@@ -33,6 +33,7 @@ typedef struct job {
     string operation;
     string filename;
     bool fromconsole;
+    bool sync;
 } job_struct;
 
 typedef struct report_info{
@@ -43,6 +44,7 @@ typedef struct report_info{
     string operation;
     string status;
     string errors;
+    int num;
 } report_info_struct;
 
 int parse_report(string, report_info_struct&);
@@ -54,13 +56,14 @@ void termination_signal_handler (int signum) {
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         terminated_workers++;
     }
-
 }
 
 int main(int argc, char* argv[]) {
 
     int fd_fss_in, fd_fss_out, opt, worker_limit=5, total_jobs=0;
     string manager_logfile, config_file;
+    int sync_fd=-1;
+    char special_message[250];
     
     
     unordered_map<string, sync_info_struct*> sync_info_mem_store;
@@ -106,14 +109,6 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    cout << "fd: " << fd_fss_in << endl;
-
-    //open fss_out for writing  **ΝΟΤ ΥΕΤ BECAUSE IT BLOCKS**
-    /*if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
-        perror("Failed to open fss_out");
-        exit(1);
-    }*/
-
     //read config file and store the info into sync_info_mem_store
     ifstream configFile(config_file);
     if (!configFile) {
@@ -131,6 +126,8 @@ int main(int argc, char* argv[]) {
         sync_info_struct_ptr->source = source;
         sync_info_struct_ptr->destination = destination;
         sync_info_struct_ptr->active = true;
+        sync_info_struct_ptr->monitored = true;
+        sync_info_struct_ptr->status = "Active";
         //sync_info_struct_ptr->last_sync_time=NULL;
             
         /*Put the sruct pointer containing info about the directory in the hash map*/
@@ -141,7 +138,9 @@ int main(int argc, char* argv[]) {
         job.operation = "FULL";
         job.filename = "ALL";
         job.fromconsole = false;
+        job.sync = false;
         jobs_queue.push(job);
+        //cout << "push line 143" << endl;
         //jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
 
     }
@@ -170,31 +169,19 @@ int main(int argc, char* argv[]) {
     pollfd poll_inotify_fds;
     poll_inotify_fds.fd = inotify_fd;
     poll_inotify_fds.events = POLLIN; 
-    pollfd poll_console_fds;
-    poll_console_fds.fd = fd_fss_in;
-    cout << "fd_fss_in" << fd_fss_in <<endl;
-    poll_console_fds.events = POLLIN; 
-    /*for (int i=0 ; i<worker_limit ; i++) {  //initialize
-        poll_fds[i].fd = -1;
-        poll_fds[i].events = -1;
-        poll_fds[i].revents = -1;
-    }*/
-    //cout << "good" << endl;
-    while (/*!jobs_queue.empty() || workers_count > 0*/ true) {  //THIS WILL CHANGE 
 
-        //check if there is something to read from fss_in
-
-        //if there is a command read it 
-        //push a job at the start fo the dequeue 
-        
+    while (true) {  //THIS WILL CHANGE 
+        //cout << "work: " << workers_count << endl;
+        if (!jobs_queue.empty()) {
+            //cout << "size: " << jobs_queue.size()<<endl;
+        }
         while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
-
 
             job_struct job = jobs_queue.front();
             jobs_queue.pop();
             total_jobs++;
-            
-            if (job.operation == "FULL") {
+            //cout << "op " << job.operation << "sync" << job.sync <<"fromson " << job.fromconsole << " " << job.source<< " " << job.dest<< " " << job.filename <<endl;
+            if (job.operation == "FULL" && job.sync == false) {
                 cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
                 logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
         
@@ -204,13 +191,50 @@ int main(int argc, char* argv[]) {
                 if (job.fromconsole == true) {
                     char message[250];
                     snprintf(message, 250, "[%s] Added directory: %s -> %s\nMonitoring started for %s\n", get_current_time(), job.source.c_str(), job.dest.c_str(), job.source.c_str());
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_out");
+                        exit(1);
+                    }
                     write(fd_fss_out, message, sizeof(message));
+                    close(fd_fss_out);
                 }
+            } else if (job.sync == true) {
+                cout << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
+                logfile << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
+                char message[250];
+                snprintf(message, 250, "[%s] Syncing directory: %s -> %s\n", get_current_time(), job.source.c_str(), job.dest.c_str());
+
+                if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                    perror("Failed to open fss_out");
+                    exit(1);
+                }
+                write(fd_fss_out, message, sizeof(message));
+                close(fd_fss_out);
+            }
+
+            auto it = sync_info_mem_store.find(job.source);
+            if (job.fromconsole == true && job.operation == "FULL" && job.sync == false && it == sync_info_mem_store.end() ) {
+                sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
+                sync_info_struct_ptr->source = job.source;
+                sync_info_struct_ptr->destination = job.dest;
+                sync_info_struct_ptr->active = true;
+                sync_info_struct_ptr->monitored = true;
+                sync_info_struct_ptr->wd = inotify_add_watch(inotify_fd, job.source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+                if (sync_info_struct_ptr->wd == -1) {
+                    perror("inotify_add_wach problem");
+                    exit(1);
+                }
+                    
+                /*Put the sruct pointer containing info about the directory in the hash map*/
+                sync_info_mem_store[job.source] = sync_info_struct_ptr;
             }
 
             /*Fork the initial ΜΑΧ_WORKERS*/
             int pipe_fd[2]; //pipe for worker - manager communication
             if (pipe(pipe_fd)==-1){ perror("pipe"); exit(1);}
+            if (job.sync == true) {
+                sync_fd = pipe_fd[READ];
+            }
             //pipe_descriptor_table[workers_count] = pipe_fd[READ]; //keep the read end of the active pipes
             //cout << job.source << " " << job.dest << " " << job.filename << " " << job.operation << endl;
 
@@ -235,6 +259,7 @@ int main(int argc, char* argv[]) {
             } else {    //parent
                 //cout << "started worker with pid: " << workerpid << endl;
                 close(pipe_fd[WRITE]);  //parent only reads from child
+                sync_info_mem_store[job.source]->active = true;
                 int index;
                 for (int j=0 ; j<worker_limit ; j++) {  //find the first available slot in the table 
                     if (poll_fds[j].fd == 0) {
@@ -247,9 +272,7 @@ int main(int argc, char* argv[]) {
                 workers_count++;
             }   
         }
-       // cout << "out" << endl;
 
-        //cout <<"sdvff" << endl;
         int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll
         if (poll_ready == -1) {
             if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
@@ -271,10 +294,33 @@ int main(int argc, char* argv[]) {
                     perror("parse_report");
                     exit(-1);
                 }
-                //cout << "REPORT\n" << report_info.timestamp << endl << report_info.source << endl << report_info.dest << endl << report_info.pid << endl << report_info.operation << endl << report_info.status << endl << report_info.errors << endl;
-                logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
-                //renew data structs
+                sync_info_mem_store[report_info.source]->active = false;
+                //this case is only for when we have a sync command
+                //cout << "fd: " << poll_fds[i].fd << " sync fd: " << sync_fd<< endl;
+                if (poll_fds[i].fd == sync_fd) {
+                    //cout << "yeeeesss" << endl;
+                    sync_fd = -1;
+                    cout << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
+                    logfile << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
+                    char message[250];
+                    snprintf(message, 250, "[%s] Sync completed: %s -> %s Errors:%d\n", get_current_time(), report_info.source.c_str(), report_info.dest.c_str(), sync_info_mem_store[report_info.source]->error_count);
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_out");
+                        exit(1);
+                    }
+                    write(fd_fss_out, message, sizeof(message));
+                    close(fd_fss_out);
+                } else {
+                    //cout << "REPORT\n" << report_info.timestamp << endl << report_info.source << endl << report_info.dest << endl << report_info.pid << endl << report_info.operation << endl << report_info.status << endl << report_info.errors << endl;
+                    logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
+                    //renew data structs
+                    //cout << "sync_info_mem_store[" <<report_info.source<<"]"<< " " << sync_info_mem_store[report_info.source]->wd << endl; 
+                }
                 strcpy(sync_info_mem_store[report_info.source]->last_sync_time, report_info.timestamp.c_str());
+                sync_info_mem_store[report_info.source]->active = false;
+                //sync_info_mem_store[report_info.source]->status = "Active";
+                sync_info_mem_store[report_info.source]->error_count = report_info.num;
+                
 
                 close(poll_fds[i].fd);  //not needed any more, initialize again so another descriptor can be placed in its position
                 poll_fds[i].fd=0;
@@ -322,10 +368,15 @@ int main(int argc, char* argv[]) {
                 } else if (event->mask & IN_DELETE) {
                     new_job.operation = "DELETED";
                     //cout << "File deleted: " << event->name << "\n";
+                } else {
+                    i += sizeof(struct inotify_event) + event->len;
+                    continue;
                 }
-
+                new_job.fromconsole = false;
+                new_job.sync = false;
                 //add the new job to the queue
                 jobs_queue.push(new_job);
+                //cout << "push line 375" << endl;
             
                 i += sizeof(struct inotify_event) + event->len;
             }
@@ -338,32 +389,19 @@ int main(int argc, char* argv[]) {
         }
 
         //check for command from console
-
-
-        //poll for the inotify 
-        int poll_console = poll(&poll_console_fds, 1, 100);
-        if (poll_console == -1) {
-            if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
-                continue;
-            } else {
-                perror("poll");
-                exit(1);
-            }
-        }
-        char console_buffer[256];
-        if (poll_console_fds.revents & POLLIN) {
-            cout << "we have data" << endl;
-            ssize_t s = read(fd_fss_in, console_buffer, 256);
-            cout << "reeead" << endl;
-            //handle which command 
+        char console_buffer[256] = {0};
+        ssize_t s = read(fd_fss_in, console_buffer, 256);
+        if (s > 0) {
+            console_buffer[s] = '\0';
             vector<string> command_parts;
             string command(console_buffer);
-            cout << "command: " << command << endl;
+            string token;
             istringstream iss(command);
-            while (iss >> command) {
-                command_parts.push_back(command);
+            while (iss >> token) {
+                command_parts.push_back(token);
             }
 
+            //handle which command
             if (command_parts[0] == "add") {
                 job_struct new_job;
                 new_job.source = command_parts[1];
@@ -371,9 +409,11 @@ int main(int argc, char* argv[]) {
                 new_job.filename = "ALL";
                 new_job.operation = "FULL";
                 new_job.fromconsole = true;
+                new_job.sync = false;
 
                 //search if the source dir is already in queue
-                if (sync_info_mem_store.find(new_job.source) != sync_info_mem_store.end()) {
+                auto it = sync_info_mem_store.find(new_job.source);
+                if (it != sync_info_mem_store.end() && it->second->monitored == true /*|| it->second->monitored == false sync_info_mem_store[new_job.source]->monitored == false*/) {
                     char message[256];
                     snprintf(message, 256, "[%s] Already in queue: %s\n", get_current_time(), new_job.source.c_str());
                     cout << message << endl;
@@ -382,23 +422,125 @@ int main(int argc, char* argv[]) {
                         exit(1);
                     }
                    ssize_t n = write(fd_fss_out, message, sizeof(message));
-                   if (n<=0) {
-                    cout<< "tipota de egrapsa" << endl;
+                   close(fd_fss_out);
+                   if (n<=0){
+                    perror("error writing to fss_out");
                    }
                     continue;
                 }
-
                 //if you didnt find it 
+                sync_info_mem_store[new_job.source]->status = "Active";
+                sync_info_mem_store[new_job.source]->monitored = true;
+                sync_info_mem_store[new_job.source]->wd = inotify_add_watch(inotify_fd, it->second->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
                 jobs_queue.push(new_job);
-                cout << "pushed" << endl;
+                //cout << "push line 430" << endl;
+
+            } else if (command_parts[0] == "sync") {
+                //search if there is an active job with this source dir
+                //cout << "sdfvff: " << command_parts[1] << endl;
+                if (sync_info_mem_store[command_parts[1]]->active == true) {   
+                    char message[256];
+                    snprintf(message, 256, "[%s] Sync already in progress: %s\n", get_current_time(), command_parts[1].c_str());
+                    cout << message << endl;
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_in");
+                        exit(1);
+                    }
+                   ssize_t n = write(fd_fss_out, message, sizeof(message));
+                   close(fd_fss_out);
+                   if (n<=0){
+                    perror("error writing to fss_out");
+                   }
+                   continue;
+                }   //if there is no active job with this source dir
+                job_struct new_job;
+                new_job.source = command_parts[1];
+                new_job.dest = sync_info_mem_store[new_job.source]->destination;
+                new_job.filename = "ALL";
+                new_job.operation = "FULL";
+                new_job.fromconsole = true;
+                new_job.sync = true;
+                jobs_queue.push(new_job);
+                //cout << "push line 458" << endl;
+
+            } else if (command_parts[0] == "status") {
+                if (sync_info_mem_store.find(command_parts[1]) == sync_info_mem_store.end()) {  //wasnt found
+                    char message[256];
+                    snprintf(message, 256, "[%s] Directory not monitored: %s\n", get_current_time(),  command_parts[1].c_str());
+                    cout << message << endl;
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_in");
+                        exit(1);
+                    }
+                    ssize_t n = write(fd_fss_out, message, sizeof(message));
+                    close(fd_fss_out);
+                    if (n<=0){
+                        perror("error writing to fss_out");
+                    }
+                    //cout << "[" << get_current_time() << "]" << " Directory not monitored: " << command_parts[1] << endl;
+                    continue;
+                } 
+                //was found
+                char message[256];
+                snprintf(message, 256, "[%s] Status requested for %s\nDirectory: %s\nTarget: %s\nLast Sync: %s\nErrors: %d\nStatus: %s\n", get_current_time(), command_parts[1].c_str(), command_parts[1].c_str(), sync_info_mem_store[command_parts[1]]->destination.c_str(), sync_info_mem_store[command_parts[1]]->last_sync_time, sync_info_mem_store[command_parts[1]]->error_count, sync_info_mem_store[command_parts[1]]->status.c_str());
+                cout << message << endl;
+                if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                    perror("Failed to open fss_in");
+                    exit(1);
+                }
+                ssize_t n = write(fd_fss_out, message, sizeof(message));
+                close(fd_fss_out);
+                if (n<=0){
+                    perror("error writing to fss_out");
+                }
+                //cout << "[" << get_current_time() << "]" << " Status requested for " << command_parts[1] << endl << "Directory: " << command_parts[1] << endl << "Target: " << sync_info_mem_store[command_parts[1]]->destination << endl << "Last Sync: " << sync_info_mem_store[command_parts[1]]->last_sync_time << endl << "Errors: " << sync_info_mem_store[command_parts[1]]->error_count << endl << "Status: " << sync_info_mem_store[command_parts[1]]->status << endl;
+
+            }else if (command_parts[0] == "cancel") {
+
+                //remove from inotify
+                auto it = sync_info_mem_store.find(command_parts[1]);
+                if (it == sync_info_mem_store.end() || it->second->monitored == false) {    //if it doesnt exist or is not monitored
+                    char message[256];
+                    snprintf(message, 256, "[%s] Directory not monitored: %s\n", get_current_time(), command_parts[1].c_str());
+                    cout << message << endl;
+                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                        perror("Failed to open fss_in");
+                        exit(1);
+                    }
+                    ssize_t n = write(fd_fss_out, message, sizeof(message));
+                    close(fd_fss_out);
+                    if (n<=0){
+                        perror("error writing to fss_out");
+                    }
+                    continue;
+                }
+                //if it is currently monitored
+                if(inotify_rm_watch(inotify_fd, sync_info_mem_store[command_parts[1]]->wd) == -1) {
+                    perror("problem removing watch descriptor");
+                    exit(-1);
+                }
+                sync_info_mem_store[command_parts[1]]->wd = -1;
+                sync_info_mem_store[command_parts[1]]->monitored = false;
+                sync_info_mem_store[command_parts[1]]->status = "Inactive";
+                char message[256];
+                snprintf(message, 256, "[%s] Monitoring stopped for %s\n", get_current_time(), command_parts[1].c_str());
+                cout << message << endl;
+                if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                    perror("Failed to open fss_in");
+                    exit(1);
+                }
+                ssize_t n = write(fd_fss_out, message, sizeof(message));
+                close(fd_fss_out);
+                if (n<=0){
+                    perror("error writing to fss_out");
+                }
+
+            } else if (command_parts[0] == "shudown") {
+
+            } else {
+                perror(" the command i just read is wrong\n");
             }
-                
-
         }
-
-
-
-
     }
     logfile.close();
     return 0;
@@ -429,10 +571,9 @@ int parse_report(string exec_report, report_info_struct& report_info) {
             report_info.status = value;
         } else if (key == "ERRORS") {
             report_info.errors = value;
-        } /*else {
-            cout << "key: " << key << " value: " << value << endl;
-            perror("key-value\n");
-        }*/
+        } else if (key == "NUM") {
+            report_info.num = atoi(value.c_str());
+        }
 
     }
 

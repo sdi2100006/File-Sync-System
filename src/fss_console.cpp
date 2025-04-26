@@ -48,7 +48,7 @@ int main (int argc, char* argv[]) {
             command.push_back(command_part);
         }
         for (int i=0 ; i<command.size() ; i++) {
-            cout << command[i] << endl;
+            //cout << command[i] << endl;
         }
 
         bool command_error = false;
@@ -83,20 +83,18 @@ int main (int argc, char* argv[]) {
         }
 
         //commands are correct
-        cout << "comms correct" << endl;
+
         int fd_fss_in = open("fss_in", O_WRONLY | O_NONBLOCK);
         if ( fd_fss_in < 0 ){
             perror("failed to open fss_in");
             exit(1);
         }
-        cout << "about to write" << endl;
-
         write(fd_fss_in, user_input.c_str(), user_input.length());  //we sent the command to fss_manager and we have to wait for a response
         close(fd_fss_in);
 
-        cout << "wrote " << endl;
+        //cout << "wrote " << endl;
 
-        int fd_fss_out = open("fss_out", O_RDONLY | O_NONBLOCK);
+        int fd_fss_out = open("fss_out", O_RDONLY );
         if ( fd_fss_out < 0 ){
             perror("failed to open fss_out");
             exit(1);
@@ -104,13 +102,34 @@ int main (int argc, char* argv[]) {
         
         char buffer[256];
         ssize_t bytes_read = read(fd_fss_out, buffer, sizeof(buffer));
+        close(fd_fss_out);
         if (bytes_read > 0) {
-            buffer[bytes_read] = '\0'; // Null-terminate
-            cout << "Response from manager: " << buffer << endl;
+            //buffer[bytes_read] = '\0'; // Null-terminate
+            cout << buffer << endl;
+            //cout << "end" << endl;
         } else {
             cout << "No response or error reading from fss_out" << endl;
         }
-        close(fd_fss_out);
+
+        if (command[0] == "sync") {
+
+            int fd_fss_out = open("fss_out", O_RDONLY );
+            if ( fd_fss_out < 0 ){
+                perror("failed to open fss_out");
+                exit(1);
+            }
+            char buffer_1[256];
+            ssize_t bytes_read_1 = read(fd_fss_out, buffer_1, sizeof(buffer_1));
+            close(fd_fss_out);
+            if (bytes_read_1 > 0) {
+                //buffer[bytes_read] = '\0'; // Null-terminate
+                cout << buffer_1 << endl;
+                //cout << "end" << endl;
+            } else {
+                cout << "No response or error reading from fss_out" << endl;
+            }
+        }
+        //close(fd_fss_out);
     }
 
 }
