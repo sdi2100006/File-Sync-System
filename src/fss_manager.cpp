@@ -125,9 +125,9 @@ int main(int argc, char* argv[]) {
         sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
         sync_info_struct_ptr->source = source;
         sync_info_struct_ptr->destination = destination;
-        sync_info_struct_ptr->active = true;
-        sync_info_struct_ptr->monitored = true;
-        sync_info_struct_ptr->status = "Active";
+        sync_info_struct_ptr->active = false;
+        sync_info_struct_ptr->monitored = false;
+        sync_info_struct_ptr->status = "Inactive";
         //sync_info_struct_ptr->last_sync_time=NULL;
             
         /*Put the sruct pointer containing info about the directory in the hash map*/
@@ -140,9 +140,6 @@ int main(int argc, char* argv[]) {
         job.fromconsole = false;
         job.sync = false;
         jobs_queue.push(job);
-        //cout << "push line 143" << endl;
-        //jobs_queue.push({sync_info_struct_ptr->source, sync_info_struct_ptr->destination});
-
     }
 
     //create and open  logfile 
@@ -170,23 +167,24 @@ int main(int argc, char* argv[]) {
     poll_inotify_fds.fd = inotify_fd;
     poll_inotify_fds.events = POLLIN; 
 
-    while (true) {  //THIS WILL CHANGE 
-        //cout << "work: " << workers_count << endl;
-        if (!jobs_queue.empty()) {
-            //cout << "size: " << jobs_queue.size()<<endl;
-        }
+    while (true) {
+    
         while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
 
             job_struct job = jobs_queue.front();
             jobs_queue.pop();
             total_jobs++;
             //cout << "op " << job.operation << "sync" << job.sync <<"fromson " << job.fromconsole << " " << job.source<< " " << job.dest<< " " << job.filename <<endl;
-            if (job.operation == "FULL" && job.sync == false) {
+            //if (job.operation == "FULL" && job.sync == false) {
+            if (job.operation == "FULL" && job.sync == false && (sync_info_mem_store.find(job.source) == sync_info_mem_store.end() || sync_info_mem_store[job.source]->monitored == false)) {
                 cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
                 logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
         
                 cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
                 logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+
+                sync_info_mem_store[job.source]->monitored = true;
+                sync_info_mem_store[job.source]->status = "Active";
 
                 if (job.fromconsole == true) {
                     char message[250];
@@ -198,7 +196,7 @@ int main(int argc, char* argv[]) {
                     write(fd_fss_out, message, sizeof(message));
                     close(fd_fss_out);
                 }
-            } else if (job.sync == true) {
+            } else if (job.operation == "FULL" && job.sync == true) {
                 cout << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
                 logfile << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
                 char message[250];
@@ -211,7 +209,7 @@ int main(int argc, char* argv[]) {
                 write(fd_fss_out, message, sizeof(message));
                 close(fd_fss_out);
             }
-
+            /*
             auto it = sync_info_mem_store.find(job.source);
             if (job.fromconsole == true && job.operation == "FULL" && job.sync == false && it == sync_info_mem_store.end() ) {
                 sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
@@ -225,9 +223,8 @@ int main(int argc, char* argv[]) {
                     exit(1);
                 }
                     
-                /*Put the sruct pointer containing info about the directory in the hash map*/
                 sync_info_mem_store[job.source] = sync_info_struct_ptr;
-            }
+            }*/
 
             /*Fork the initial ΜΑΧ_WORKERS*/
             int pipe_fd[2]; //pipe for worker - manager communication
@@ -294,7 +291,7 @@ int main(int argc, char* argv[]) {
                     perror("parse_report");
                     exit(-1);
                 }
-                sync_info_mem_store[report_info.source]->active = false;
+                //sync_info_mem_store[report_info.source]->active = false;
                 //this case is only for when we have a sync command
                 //cout << "fd: " << poll_fds[i].fd << " sync fd: " << sync_fd<< endl;
                 if (poll_fds[i].fd == sync_fd) {
@@ -311,17 +308,12 @@ int main(int argc, char* argv[]) {
                     write(fd_fss_out, message, sizeof(message));
                     close(fd_fss_out);
                 } else {
-                    //cout << "REPORT\n" << report_info.timestamp << endl << report_info.source << endl << report_info.dest << endl << report_info.pid << endl << report_info.operation << endl << report_info.status << endl << report_info.errors << endl;
                     logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
-                    //renew data structs
-                    //cout << "sync_info_mem_store[" <<report_info.source<<"]"<< " " << sync_info_mem_store[report_info.source]->wd << endl; 
                 }
                 strcpy(sync_info_mem_store[report_info.source]->last_sync_time, report_info.timestamp.c_str());
                 sync_info_mem_store[report_info.source]->active = false;
-                //sync_info_mem_store[report_info.source]->status = "Active";
                 sync_info_mem_store[report_info.source]->error_count = report_info.num;
                 
-
                 close(poll_fds[i].fd);  //not needed any more, initialize again so another descriptor can be placed in its position
                 poll_fds[i].fd=0;
                 poll_fds[i].events=0;
@@ -347,16 +339,12 @@ int main(int argc, char* argv[]) {
             while (i < length) {
                 struct inotify_event* event = (struct inotify_event*)&inotify_buffer[i];
                 job_struct new_job;
-                //cout << "Event from wd: " << event->wd << "\n";
                 //search sync_info_mem_store to find the wd
                 for (auto it=sync_info_mem_store.begin() ; it != sync_info_mem_store.end() ; ++it) {
                     if (it->second->wd == event->wd) {
                         new_job.source = it->first;
-                        //cout << "source: " << new_job.source << endl;
                         new_job.dest = it->second->destination;
-                        //cout << "dest: " << new_job.dest << endl;
                         new_job.filename = event->name;
-                        //cout << "filename: " << new_job.filename << endl;
                     }
                 }
                 if (event->mask & IN_CREATE) {
@@ -369,18 +357,15 @@ int main(int argc, char* argv[]) {
                     new_job.operation = "DELETED";
                     //cout << "File deleted: " << event->name << "\n";
                 } else {
-                    i += sizeof(struct inotify_event) + event->len;
+                    i += sizeof(struct inotify_event) + event->len; //SKIP
                     continue;
                 }
                 new_job.fromconsole = false;
                 new_job.sync = false;
                 //add the new job to the queue
-                jobs_queue.push(new_job);
-                //cout << "push line 375" << endl;
-            
+                jobs_queue.push(new_job);            
                 i += sizeof(struct inotify_event) + event->len;
             }
-
         }
 
         if (terminated_workers > 0) {   //from the signal handler
@@ -411,7 +396,7 @@ int main(int argc, char* argv[]) {
                 new_job.fromconsole = true;
                 new_job.sync = false;
 
-                //search if the source dir is already in queue
+
                 auto it = sync_info_mem_store.find(new_job.source);
                 if (it != sync_info_mem_store.end() && it->second->monitored == true /*|| it->second->monitored == false sync_info_mem_store[new_job.source]->monitored == false*/) {
                     char message[256];
@@ -428,12 +413,28 @@ int main(int argc, char* argv[]) {
                    }
                     continue;
                 }
-                //if you didnt find it 
-                sync_info_mem_store[new_job.source]->status = "Active";
-                sync_info_mem_store[new_job.source]->monitored = true;
-                sync_info_mem_store[new_job.source]->wd = inotify_add_watch(inotify_fd, it->second->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+
+                if (it == sync_info_mem_store.end()) {  //if you didnt find it 
+                    /*Making a new struct to keep info about this directory*/
+                    sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
+                    sync_info_struct_ptr->source = new_job.source;
+                    sync_info_struct_ptr->destination = new_job.dest;
+                    sync_info_struct_ptr->active = false;
+                    sync_info_struct_ptr->monitored = false;
+                    sync_info_struct_ptr->status = "Active";
+                    sync_info_struct_ptr->wd = -1;
+                    //add it to the sync info mem store 
+                    sync_info_mem_store[new_job.source] = sync_info_struct_ptr;
+                } else { //found it but monitored == false 
+                   // sync_info_mem_store[new_job.source]->status = "Active";
+                //ync_info_mem_store[new_job.source]->monitored = true;
+                }
+                //restart the monitoring 
+                
+                sync_info_mem_store[new_job.source]->wd = inotify_add_watch(inotify_fd, sync_info_mem_store[new_job.source]->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+                //cout << "ok" << endl;
                 jobs_queue.push(new_job);
-                //cout << "push line 430" << endl;
+
 
             } else if (command_parts[0] == "sync") {
                 //search if there is an active job with this source dir
@@ -461,10 +462,10 @@ int main(int argc, char* argv[]) {
                 new_job.fromconsole = true;
                 new_job.sync = true;
                 jobs_queue.push(new_job);
-                //cout << "push line 458" << endl;
 
             } else if (command_parts[0] == "status") {
-                if (sync_info_mem_store.find(command_parts[1]) == sync_info_mem_store.end()) {  //wasnt found
+                auto it = sync_info_mem_store.find(command_parts[1]);
+                if (it == sync_info_mem_store.end()) {  //wasnt found
                     char message[256];
                     snprintf(message, 256, "[%s] Directory not monitored: %s\n", get_current_time(),  command_parts[1].c_str());
                     cout << message << endl;
@@ -477,7 +478,6 @@ int main(int argc, char* argv[]) {
                     if (n<=0){
                         perror("error writing to fss_out");
                     }
-                    //cout << "[" << get_current_time() << "]" << " Directory not monitored: " << command_parts[1] << endl;
                     continue;
                 } 
                 //was found
