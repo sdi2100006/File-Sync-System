@@ -103,7 +103,6 @@ int main(int argc, char *argv[]) {
 
     int copied_count = 0;
     int skipped_count = 0;
-
     //start the exec report
     char* timestamp = get_current_time();
     pid_t  pid = getpid();
@@ -236,9 +235,8 @@ int main(int argc, char *argv[]) {
     strcat(report_buffer,"\n");
     strcat(report_buffer, additional_info);
    
-   
     cout << report_buffer << endl; //send to pipe
-   // cout.flush();   //maybe uselles
+    cout.flush();   //maybe uselles
     
     free(additional_info);
     free(report_buffer);
