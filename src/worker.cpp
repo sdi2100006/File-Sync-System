@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
     //cout << "strlen: " << strlen(report_buffer) << endl;
     strcat(report_buffer,"\n");
     strcat(report_buffer, additional_info);
-   
+   sleep(10);
     cout << report_buffer << endl; //send to pipe
     cout.flush();   //maybe uselles
     

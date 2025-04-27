@@ -84,7 +84,7 @@ int main (int argc, char* argv[]) {
 
         //commands are correct
 
-        int fd_fss_in = open("fss_in", O_WRONLY | O_NONBLOCK);
+        int fd_fss_in = open("fss_in", O_WRONLY  /*|O_NONBLOCK*/);
         if ( fd_fss_in < 0 ){
             perror("failed to open fss_in");
             exit(1);
@@ -92,125 +92,44 @@ int main (int argc, char* argv[]) {
         write(fd_fss_in, user_input.c_str(), user_input.length());  //we sent the command to fss_manager and we have to wait for a response
         close(fd_fss_in);
 
-        //cout << "wrote " << endl;
+
+        int fd_fss_out = open("fss_out", O_RDONLY );
+        if ( fd_fss_out < 0 ){
+            perror("failed to open fss_out");
+            exit(1);
+        }
+            
+        char buffer[256];
+        ssize_t bytes_read = read(fd_fss_out, buffer, sizeof(buffer));
+        //close(fd_fss_out);
+        if (bytes_read > 0) {
+            buffer[bytes_read] = '\0'; // Null-terminate
+            cout << buffer << endl;
+        } else {
+            cout << "No response or error reading from fss_out" << endl;
+        }
+
 
         if (command[0] == "shutdown") {
-
-            int fd_fss_out = open("fss_out", O_RDONLY );
-            if ( fd_fss_out < 0 ){
-                perror("failed to open fss_out");
-                exit(1);
-            }
-            char buffer_1[256];
-            ssize_t bytes_read_1;
-            while((bytes_read_1 = read(fd_fss_out, buffer_1, sizeof(buffer_1)))>0) {
-                //buffer_1[bytes_read_1 -1] = '\0'; // Null-terminate
-                cout << buffer_1 << endl;
-            }
-            if (bytes_read_1 == 0) {
-                // This means fss_manager closed the pipe normally
-                //cout << "Manager finished shutdown." << endl;
-            } else if (bytes_read_1 < 0) {
-                perror("error reading from fss_out");
-            }
-        
-            close(fd_fss_out);
-        } else {
-            int fd_fss_out = open("fss_out", O_RDONLY );
-            if ( fd_fss_out < 0 ){
-                perror("failed to open fss_out");
-                exit(1);
-            }
-            
+            //int fd_fss_out = open("fss_out", O_RDONLY );
+           // if ( fd_fss_out < 0 ){
+              //  perror("failed to open fss_out");
+               // exit(1);
+            //}
+                
             char buffer[256];
             ssize_t bytes_read = read(fd_fss_out, buffer, sizeof(buffer));
             close(fd_fss_out);
             if (bytes_read > 0) {
                 buffer[bytes_read] = '\0'; // Null-terminate
                 cout << buffer << endl;
-                //cout << "end" << endl;
             } else {
-                cout << "No response or error reading from fss_out" << endl;
-            }
-
-            if (command[0] == "sync") {
-
-                int fd_fss_out = open("fss_out", O_RDONLY );
-                if ( fd_fss_out < 0 ){
-                    perror("failed to open fss_out");
-                    exit(1);
-                }
-                char buffer_1[256];
-                ssize_t bytes_read_1 = read(fd_fss_out, buffer_1, sizeof(buffer_1));
-                close(fd_fss_out);
-                if (bytes_read_1 > 0) {
-                    //buffer[bytes_read] = '\0'; // Null-terminate
-                    cout << buffer_1 << endl;
-                    //cout << "end" << endl;
-                } else {
-                    cout << "No response or error reading from fss_out" << endl;
-                }
+                cout << "No response or error reading from fss_out shutdown" << endl;
             }
         }
-
-        /*int fd_fss_out = open("fss_out", O_RDONLY );
-        if ( fd_fss_out < 0 ){
-            perror("failed to open fss_out");
-            exit(1);
-        }
-        
-        char buffer[256];
-        ssize_t bytes_read = read(fd_fss_out, buffer, sizeof(buffer));
         close(fd_fss_out);
-        if (bytes_read > 0) {
-            buffer[bytes_read] = '\0'; // Null-terminate
-            cout << buffer << endl;
-            //cout << "end" << endl;
-        } else {
-            cout << "No response or error reading from fss_out" << endl;
-        }*/
-
-        /*if (command[0] == "sync") {
-
-            int fd_fss_out = open("fss_out", O_RDONLY );
-            if ( fd_fss_out < 0 ){
-                perror("failed to open fss_out");
-                exit(1);
-            }
-            char buffer_1[256];
-            ssize_t bytes_read_1 = read(fd_fss_out, buffer_1, sizeof(buffer_1));
-            close(fd_fss_out);
-            if (bytes_read_1 > 0) {
-                //buffer[bytes_read] = '\0'; // Null-terminate
-                cout << buffer_1 << endl;
-                //cout << "end" << endl;
-            } else {
-                cout << "No response or error reading from fss_out" << endl;
-            }
-        }*/
-
-        
-        /*if (command[0] == "shutdown") {
-
-            int fd_fss_out = open("fss_out", O_RDONLY );
-            if ( fd_fss_out < 0 ){
-                perror("failed to open fss_out");
-                exit(1);
-            }
-            char buffer_1[256];
-            ssize_t bytes_read_1 = read(fd_fss_out, buffer_1, sizeof(buffer_1));
-            close(fd_fss_out);
-            if (bytes_read_1 > 0) {
-                //buffer[bytes_read] = '\0'; // Null-terminate
-                cout <<"sddfsd"<< buffer_1 << endl;
-                //cout << "end" << endl;
-            } else {
-                cout << "No response or error reading from fss_out" << endl;
-            }
-        }*/
-
-
-        //close(fd_fss_out);
+        if (command[0] == "shutdown") {
+            break;
+        }
     }
-
 }

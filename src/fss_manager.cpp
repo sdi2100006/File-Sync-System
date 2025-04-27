@@ -20,7 +20,7 @@
 #define WRITE 1
 #define REPORT_SIZE 256
 #define MESSAGE_SIZE 256
-#define INOTIFY_SIZE 256
+#define INOTIFY_SIZE 4096
 
 using namespace std;
 
@@ -156,76 +156,76 @@ int main(int argc, char* argv[]) {
     pollfd poll_inotify_fds;
     poll_inotify_fds.fd = inotify_fd;
     poll_inotify_fds.events = POLLIN; 
+    char sync_response[MESSAGE_SIZE];
 
-    while (shutdown == false || !jobs_queue.empty()) {
+    while (/*shutdown == false || !jobs_queue.empty()*/ true) {
         //cout << "queue size: " << jobs_queue.size() <<endl;
-   
-    
-        while (!jobs_queue.empty() && workers_count < worker_limit) {   //worker spawning loop
-            //cout << "workers" << workers_count << endl;
+        //cout << workers_count <<  endl;
+
+        if (!jobs_queue.empty() && workers_count < worker_limit) {
+            
             job_struct job = jobs_queue.front();
             jobs_queue.pop_front();
             total_jobs++;
 
-            if (job.operation == "FULL" && job.sync == false && (sync_info_mem_store.find(job.source) == sync_info_mem_store.end() || sync_info_mem_store[job.source]->monitored == false)) {
-                if (shutdown == false) {
-                    cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
-                    logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
-                    //fflush(stdout);  // Explicitly flush stdout
-                    //logfile.flush();      // Explicitly flush logfile if needed
             
-                    cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
-                    logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
-                    //fflush(stdout);  // Explicitly flush stdout
-                    //logfile.flush();      // Explicitly flush logfile if needed
+            if (job.sync == true) {
+                //cout << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
+                //logfile << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
+                //char message[MESSAGE_SIZE];
+                memset(sync_response, 0, MESSAGE_SIZE);
+                snprintf(sync_response, MESSAGE_SIZE, "[%s] Syncing directory: %s -> %s\n", get_current_time(), job.source.c_str(), job.dest.c_str());
+                if (shutdown == false) {
+                    cout << sync_response;
                 }
-                if (sync_info_mem_store.find(job.source) == sync_info_mem_store.end()) {
-                    //create it 
-                    /*cout << "created" << endl;
-                    sync_info_struct* sync_info_struct_ptr = new sync_info_struct;
-                    sync_info_struct_ptr->source = job.source;
-                    sync_info_struct_ptr->destination = job.dest;
-                    sync_info_struct_ptr->active = false;
-                    sync_info_struct_ptr->monitored = true;
-                    sync_info_struct_ptr->status = "Active";*/
-                    if (shutdown == false) {
-                        sync_info_mem_store[job.source]->wd = inotify_add_watch(inotify_fd, job.source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
-                        if ( sync_info_mem_store[job.source]->wd == -1) {
-                            perror("inotify_add_wach problem");
+                cout << sync_response;
+                logfile << sync_response;
+                /*if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                    perror("Failed to open fss_out");
+                    exit(1);
+                }*/
+                //write(fd_fss_out, message, strlen(message));
+                //close(fd_fss_out);
+
+                sync_info_mem_store[job.source]->wd = inotify_add_watch(inotify_fd, job.source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+                if ( sync_info_mem_store[job.source]->wd == -1) {
+                    perror("inotify_add_wach problem");
+                    exit(1);
+                }
+                sync_info_mem_store[job.source]->monitored = true;
+                sync_info_mem_store[job.source]->status = "Active";
+            }
+
+            if (sync_info_mem_store[job.source]->monitored == false ) {
+                if (shutdown == false) {
+                    char message[MESSAGE_SIZE];
+                    snprintf(message, MESSAGE_SIZE, "[%s] Added directory: %s -> %s\n[%s]Monitoring started for %s\n", get_current_time(), job.source.c_str(), job.dest.c_str(), get_current_time(), job.source.c_str());
+                    cout << message;
+                    logfile << message;
+                    if (job.fromconsole == true) {
+                        if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
+                            perror("Failed to open fss_out");
                             exit(1);
                         }
-                        sync_info_mem_store[job.source]->monitored = true;
-                        sync_info_mem_store[job.source]->status= "Active";
+                        write(fd_fss_out, message, strlen(message));
+                        close(fd_fss_out);
                     }
-                    //sync_info_mem_store[job.source] = sync_info_struct_ptr;
-                } else {
+                
+
+                    /*cout << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
+                    logfile << "[" << get_current_time() << "]" << " Added directory: " << job.source << " -> " << job.dest << endl;
+
+                    cout << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl;
+                    logfile << "[" << get_current_time() << "]" << " Monitoring started for " << job.source << endl*/
+
+                    sync_info_mem_store[job.source]->wd = inotify_add_watch(inotify_fd, job.source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+                    if ( sync_info_mem_store[job.source]->wd == -1) {
+                        perror("inotify_add_wach problem");
+                        exit(1);
+                    }
                     sync_info_mem_store[job.source]->monitored = true;
                     sync_info_mem_store[job.source]->status = "Active";
                 }
-
-                if (job.fromconsole == true) {
-                    char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Added directory: %s -> %s\nMonitoring started for %s\n", get_current_time(), job.source.c_str(), job.dest.c_str(), job.source.c_str());
-                    if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
-                        perror("Failed to open fss_out");
-                        exit(1);
-                    }
-                    write(fd_fss_out, message, strlen(message));
-                    close(fd_fss_out);
-                }
-
-            } else if (job.operation == "FULL" && job.sync == true) {
-                cout << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
-                logfile << "[" << get_current_time() << "]" << " Syncing directory: " << job.source << " -> " << job.dest << endl;
-                char message[MESSAGE_SIZE];
-                snprintf(message, MESSAGE_SIZE, "[%s] Syncing directory: %s -> %s\n", get_current_time(), job.source.c_str(), job.dest.c_str());
-
-                if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
-                    perror("Failed to open fss_out");
-                    exit(1);
-                }
-                write(fd_fss_out, message, strlen(message));
-                close(fd_fss_out);
             }
 
             /*Forking logic*/
@@ -267,8 +267,9 @@ int main(int argc, char* argv[]) {
                 poll_fds[free_pos].events = POLLIN;    //monitor only if a fd is ready for reading 
                 workers_count++;
             }   
-        
         }
+        //poll logic
+
         /*Poll for reading exec reports from workers*/
         int poll_ready = poll(poll_fds, worker_limit, 100); //non blocking poll-maybe make the timeout 10 or 100
         if (poll_ready == -1) {
@@ -297,21 +298,26 @@ int main(int argc, char* argv[]) {
 
                 if (poll_fds[i].fd == sync_fd) {    //special case for the sync command - diferent logs 
                     sync_fd = -1;   //reinitialize
-                    cout << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
-                    logfile << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
+                    //cout << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
+                    //logfile << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
                     char message[MESSAGE_SIZE];
                     snprintf(message, MESSAGE_SIZE, "[%s] Sync completed: %s -> %s Errors:%d\n", get_current_time(), report_info.source.c_str(), report_info.dest.c_str(), sync_info_mem_store[report_info.source]->error_count);
+                    cout << message;
+                    logfile << message;
+                    char complete_message[2*MESSAGE_SIZE];
+                    snprintf(complete_message, 2*MESSAGE_SIZE, "%s%s", sync_response, message);
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_out");
                         exit(1);
                     }
-                    write(fd_fss_out, message, strlen(message));
+                    write(fd_fss_out, complete_message, strlen(complete_message));
                     close(fd_fss_out);
-                } else {   
+                } 
+                if (shutdown == false)
                     cout << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
-
-                    logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
-                }
+                
+                logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
+            
                 /*Update sync_info_mem store after a worker ended*/
                 strcpy(sync_info_mem_store[report_info.source]->last_sync_time, report_info.timestamp.c_str());
                 sync_info_mem_store[report_info.source]->active = false;    //a worker is no longer actively running for this directory
@@ -326,6 +332,7 @@ int main(int argc, char* argv[]) {
 
         /*poll for reading events from inotify*/
         if (shutdown == false) {    //we dont want to do this after a shutdown command
+            //cout << "before inotify" << endl;
             int poll_inotify = poll(&poll_inotify_fds, 1, 100);
             if (poll_inotify == -1) {
                 if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
@@ -339,6 +346,10 @@ int main(int argc, char* argv[]) {
             if (poll_inotify_fds.revents & POLLIN) {    //there is data to read from inotify
                 const struct inotify_event *event;
                 int length = read(inotify_fd, inotify_buffer, INOTIFY_SIZE);
+                if (length < 0) {
+                    perror("read from inotify");
+                }
+                //cout << "reaaad" << endl;
                 int i=0;
                 while (i < length) {
                     struct inotify_event* event = (struct inotify_event*)&inotify_buffer[i];
@@ -362,28 +373,21 @@ int main(int argc, char* argv[]) {
                     }
                     new_job.fromconsole = false;
                     new_job.sync = false;
-                    jobs_queue.push_front(new_job);        //PUSH TO THE FRONT OF DEQUEUE    
+                    jobs_queue.push_front(new_job);        //PUSH TO THE FRONT OF DEQUEUE  
+                    //cout << "pushed" << endl;  
                     i += sizeof(struct inotify_event) + event->len;
                 }
             }
-        }   
-
-        /*Reniew how many workers we have active at the moment*/
-        if (terminated_workers > 0) {   //from the signal handler
-            workers_count -= terminated_workers;
-            terminated_workers = 0;     //reset the flag
-        }
+        }  
 
         /*check for command from console*/
-        //cout << "chcking fro commands" << endl;
         char console_buffer[MESSAGE_SIZE] = {0};
-        ssize_t s = read(fd_fss_in, console_buffer, MESSAGE_SIZE);
+        ssize_t s = read(fd_fss_in, console_buffer, MESSAGE_SIZE);      //no need for poll because read is non blocking due to fss in being non blocking
         if (s > 0) {
-            //cout << "here" << endl;
          /* Break down the command in parts*/
             console_buffer[s] = '\0';   //null terminated because i had errors with garbage values
             vector<string> command_parts;
-            string command(console_buffer);
+            string command(console_buffer);     //make char[] a string
             string token;
             istringstream iss(command);
             while (iss >> token) {
@@ -430,12 +434,12 @@ int main(int argc, char* argv[]) {
                     sync_info_struct_ptr->status = "Active";
                     sync_info_struct_ptr->wd = -1;
                     sync_info_mem_store[new_job.source] = sync_info_struct_ptr;     //add it to the sync info mem store 
-                } else { //found but monitored == false 
-                    sync_info_mem_store[new_job.source]->status = "Active";
-                    sync_info_mem_store[new_job.source]->monitored = true;
-                }
+                }// else { //found but monitored == false 
+                 //   sync_info_mem_store[new_job.source]->status = "Active";
+                   // sync_info_mem_store[new_job.source]->monitored = true;
+                //}
                 //restart the monitoring 
-                sync_info_mem_store[new_job.source]->wd = inotify_add_watch(inotify_fd, sync_info_mem_store[new_job.source]->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
+                //sync_info_mem_store[new_job.source]->wd = inotify_add_watch(inotify_fd, sync_info_mem_store[new_job.source]->source.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE);
                 jobs_queue.push_front(new_job);//AT THE FRONT 
 
             } else if (command_parts[0] == "sync") {
@@ -559,12 +563,12 @@ int main(int argc, char* argv[]) {
                 char message[MESSAGE_SIZE];
                 snprintf(message, MESSAGE_SIZE, "[%s] Shutting down manager...\n[%s] Waiting for all active workers to finish.\n[%s] Processing remaining queued tasks.\n", get_current_time(), get_current_time(), get_current_time());
                 cout << message << endl;
-                if ( (fd_fss_out = open("fss_out", O_WRONLY ) ) < 0) {
+                if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                     perror("Failed to open fss_in");
                     exit(1);
                 }
                 ssize_t n = write(fd_fss_out, message, strlen(message));
-                //close(fd_fss_out);    KEEP THE PIPE OPEN BECAUSE WE HAVE TO WRITE ONE MORE MESSAGE
+                //close(fd_fss_out);   
                 if (n<=0){
                     perror("error writing to fss_out");
                 }
@@ -580,25 +584,35 @@ int main(int argc, char* argv[]) {
 
 
         }
+
+        /*Reniew how many workers we have active at the moment*/
+        if (terminated_workers > 0) {   //from the signal handler
+            workers_count -= terminated_workers;
+            terminated_workers = 0;     //reset the flag
+        }
+
+        if (jobs_queue.empty() && workers_count == 0) {
+            break;
+        }
     }
 
     for(auto it = sync_info_mem_store.begin() ; it != sync_info_mem_store.end() ; ++it) {
         delete it->second;
     }
 
+
+
     char message[MESSAGE_SIZE];
-    snprintf(message, MESSAGE_SIZE, "[%s] Manager shutdown complete", get_current_time());
+    snprintf(message, MESSAGE_SIZE, "[%s] Manager shutdown complete\n", get_current_time());
     cout << message << endl;
-    /*if ( (fd_fss_out = open("fss_out", O_WRONLY) ) < 0) {
-        perror("Failed to open fss_in");
-        exit(1);
-    }*/
     ssize_t n = write(fd_fss_out, message, strlen(message));
-    close(fd_fss_out);  //NOW CLOSE THE PIPE
+    //close(fd_fss_out);   
     if (n<=0){
         perror("error writing to fss_out");
     }
+
     logfile.close();
+    close(fd_fss_out);
     return 0;
 }
 
