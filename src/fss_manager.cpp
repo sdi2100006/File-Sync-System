@@ -177,9 +177,10 @@ int main(int argc, char* argv[]) {
                 snprintf(sync_response, MESSAGE_SIZE, "[%s] Syncing directory: %s -> %s\n", get_current_time(), job.source.c_str(), job.dest.c_str());
                 if (shutdown == false) {
                     cout << sync_response;
+                    logfile << sync_response;
                 }
-                cout << sync_response;
-                logfile << sync_response;
+                //cout << sync_response;
+                //logfile << sync_response;
                 /*if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                     perror("Failed to open fss_out");
                     exit(1);
@@ -591,7 +592,7 @@ int main(int argc, char* argv[]) {
             terminated_workers = 0;     //reset the flag
         }
 
-        if (jobs_queue.empty() && workers_count == 0) {
+        if (jobs_queue.empty() && workers_count == 0 && shutdown == true) {
             break;
         }
     }
