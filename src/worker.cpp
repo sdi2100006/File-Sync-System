@@ -214,7 +214,7 @@ int main(int argc, char *argv[]) {
     } else if ( strcmp(operation, "DELETED") == 0) {
         //do deleted
         char* temp_dest = (char*)malloc( (strlen(destination) + 1 + strlen(filename) +1) * sizeof(char) );
-        snprintf(temp_dest, strlen(destination) + 1 + strlen(filename) +1, "%s/%s\n", destination, filename);
+        snprintf(temp_dest, strlen(destination) + 1 + strlen(filename) +1, "%s/%s", destination, filename);
 
         if (unlink(temp_dest) == -1) {
             //log error 
@@ -230,17 +230,21 @@ int main(int argc, char *argv[]) {
         free(temp_dest);
 
     }
-    report_buffer = (char*)realloc(report_buffer, report_buffer_size + 1 + additional_info_size);
+    //report_buffer = (char*)realloc(report_buffer, report_buffer_size + 1 + additional_info_size);
+    char final[1024];
+    snprintf(final, 1024, "%s\n%s", report_buffer, additional_info);
+
     //cout << "strlen: " << strlen(report_buffer) << endl;
-    strcat(report_buffer,"\n");
-    strcat(report_buffer, additional_info);
+    //strcat(report_buffer,"\n");
+    //strcat(report_buffer, additional_info);
+    
    sleep(10);
-    cout << report_buffer << endl; //send to pipe
+    cout << final << endl; //send to pipe
     cout.flush();   //maybe uselles
     
-    free(additional_info);
+    /*free(additional_info);
     free(report_buffer);
-    free(error_buffer);
+    free(error_buffer);*/
     exit(0);
 
 }
