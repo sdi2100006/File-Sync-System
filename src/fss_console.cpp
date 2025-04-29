@@ -34,6 +34,14 @@ int main (int argc, char* argv[]) {
                 exit(1);
         }
     }
+    
+    /*delete logfiile*/
+    if (access(console_logfile.c_str(), F_OK) == 0) {  //logfile exists
+        if (unlink(console_logfile.c_str()) == -1) {    //delete it
+            perror("cant delete consolelogfile");
+            exit(1);
+        }
+    }
 
     ofstream logfile(console_logfile);
 

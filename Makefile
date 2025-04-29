@@ -40,6 +40,5 @@ fss_console.o: src/fss_console.cpp
 # Clean up
 clean:
 	rm -f *.o $(OUT_MANAGER) $(OUT_WORKER) $(OUT_CONSOLE)
-	rm -f fss_in fss_out managerlogfile.txt
 	clear
 

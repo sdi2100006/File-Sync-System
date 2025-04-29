@@ -90,6 +90,28 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    /*cleanup*/
+    //clean logfile
+    if (access(manager_logfile.c_str(), F_OK) == 0) {       //file exists
+        if (unlink(manager_logfile.c_str()) == -1) {    //delete it
+            perror("cant delete logfile");
+            exit(1);
+        }
+    }
+    //clean named pipes
+    if (access("fss_in", F_OK) == 0) {  //fss_in exists
+        if (unlink("fss_in") == -1) {    //delete it
+            perror("cant delete fss_in");
+            exit(1);
+        }
+    }
+    if (access("fss_out", F_OK) == 0) {  //fss_out exists
+        if (unlink("fss_out") == -1) {    //delete it
+            perror("cant delete fss_out");
+            exit(1);
+        }
+    }
+
     //create 2 named pipes (fss_in and fss_out) to communincate with fss_console
     //create fss_in for reading 
     if (mkfifo("fss_in", 0666) == -1) {
