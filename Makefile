@@ -20,7 +20,7 @@ $(OUT_WORKER): worker.o utilities.o
 	$(CC) -g worker.o utilities.o -o $(OUT_WORKER)
 
 $(OUT_CONSOLE): fss_console.o
-	$(CC) -g fss_console.o -o $(OUT_CONSOLE)
+	$(CC) -g fss_console.o utilities.o -o $(OUT_CONSOLE)
 
 # Compile individual object files
 fss_manager.o: src/fss_manager.cpp

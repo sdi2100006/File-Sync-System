@@ -200,9 +200,9 @@ int main(int argc, char* argv[]) {
             if (sync_info_mem_store[job.source]->monitored == false ) {
                 if (shutdown == false) {
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Added directory: %s -> %s\n[%s]Monitoring started for %s\n", get_current_time(), job.source.c_str(), job.dest.c_str(), get_current_time(), job.source.c_str());
-                    cout << message;
-                    logfile << message;
+                    snprintf(message, MESSAGE_SIZE, "[%s] Added directory: %s -> %s\n[%s] Monitoring started for %s", get_current_time(), job.source.c_str(), job.dest.c_str(), get_current_time(), job.source.c_str());
+                    cout << message << endl;
+                    logfile << message << endl;
                     if (job.fromconsole == true) {
                         if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                             perror("Failed to open fss_out");
@@ -302,9 +302,9 @@ int main(int argc, char* argv[]) {
                     //cout << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
                     //logfile << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Sync completed: %s -> %s Errors:%d\n", get_current_time(), report_info.source.c_str(), report_info.dest.c_str(), sync_info_mem_store[report_info.source]->error_count);
-                    cout << message;
-                    logfile << message;
+                    snprintf(message, MESSAGE_SIZE, "[%s] Sync completed: %s -> %s Errors:%d", get_current_time(), report_info.source.c_str(), report_info.dest.c_str(), sync_info_mem_store[report_info.source]->error_count);
+                    cout << message << endl;
+                    logfile << message << endl;
                     char complete_message[2*MESSAGE_SIZE];
                     snprintf(complete_message, 2*MESSAGE_SIZE, "%s%s", sync_response, message);
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
@@ -314,8 +314,8 @@ int main(int argc, char* argv[]) {
                     write(fd_fss_out, complete_message, strlen(complete_message));
                     close(fd_fss_out);
                 } 
-                if (shutdown == false)
-                    cout << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
+                //if (shutdown == false)
+                    //cout << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
                 
                 logfile << "[" << report_info.timestamp << "] " << "[" << report_info.source << "] " << "[" << report_info.dest << "] " << "[" << report_info.pid << "] " << "[" << report_info.operation << "] " << "[" << report_info.status << "] " << "[" << report_info.errors << "] " << endl;
             
@@ -411,7 +411,7 @@ int main(int argc, char* argv[]) {
                 auto it = sync_info_mem_store.find(new_job.source);
                 if (it != sync_info_mem_store.end() && it->second->monitored == true) { //if found and currently monitored skip
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Already in queue: %s\n", get_current_time(), new_job.source.c_str());
+                    snprintf(message, MESSAGE_SIZE, "[%s] Already in queue: %s", get_current_time(), new_job.source.c_str());
                     cout << message << endl;
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_in");
@@ -449,7 +449,7 @@ int main(int argc, char* argv[]) {
                 if (it == sync_info_mem_store.end()) {  //not found
                     char message[MESSAGE_SIZE];
                     snprintf(message, MESSAGE_SIZE, "Directory %s has not been added before", command_parts[1].c_str());
-                    cout << message << endl;
+                    //cout << message << endl;
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_in");
                         exit(1);
@@ -464,7 +464,7 @@ int main(int argc, char* argv[]) {
                 //if found 
                 if (sync_info_mem_store[command_parts[1]]->active == true) {   //currently running a worker for this directory -> skip
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Sync already in progress: %s\n", get_current_time(), command_parts[1].c_str());
+                    snprintf(message, MESSAGE_SIZE, "[%s] Sync already in progress: %s", get_current_time(), command_parts[1].c_str());
                     cout << message << endl;
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_in");
@@ -492,7 +492,7 @@ int main(int argc, char* argv[]) {
                 auto it = sync_info_mem_store.find(command_parts[1]);
                 if (it == sync_info_mem_store.end()) {  //wasnt found -> SKIP
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Directory not monitored: %s\n", get_current_time(),  command_parts[1].c_str());
+                    snprintf(message, MESSAGE_SIZE, "[%s] Directory not monitored: %s", get_current_time(),  command_parts[1].c_str());
                     cout << message << endl;
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_in");
@@ -507,7 +507,7 @@ int main(int argc, char* argv[]) {
                 } 
                 //was found
                 char message[MESSAGE_SIZE];
-                snprintf(message, MESSAGE_SIZE, "[%s] Status requested for %s\nDirectory: %s\nTarget: %s\nLast Sync: %s\nErrors: %d\nStatus: %s\n", get_current_time(), command_parts[1].c_str(), command_parts[1].c_str(), sync_info_mem_store[command_parts[1]]->destination.c_str(), sync_info_mem_store[command_parts[1]]->last_sync_time, sync_info_mem_store[command_parts[1]]->error_count, sync_info_mem_store[command_parts[1]]->status.c_str());
+                snprintf(message, MESSAGE_SIZE, "[%s] Status requested for %s\nDirectory: %s\nTarget: %s\nLast Sync: %s\nErrors: %d\nStatus: %s", get_current_time(), command_parts[1].c_str(), command_parts[1].c_str(), sync_info_mem_store[command_parts[1]]->destination.c_str(), sync_info_mem_store[command_parts[1]]->last_sync_time, sync_info_mem_store[command_parts[1]]->error_count, sync_info_mem_store[command_parts[1]]->status.c_str());
                 cout << message << endl;
                 if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                     perror("Failed to open fss_in");
@@ -524,7 +524,7 @@ int main(int argc, char* argv[]) {
                 auto it = sync_info_mem_store.find(command_parts[1]);
                 if (it == sync_info_mem_store.end() || it->second->monitored == false) {    //if it doesnt exist or is not monitored -> skip
                     char message[MESSAGE_SIZE];
-                    snprintf(message, MESSAGE_SIZE, "[%s] Directory not monitored: %s\n", get_current_time(), command_parts[1].c_str());
+                    snprintf(message, MESSAGE_SIZE, "[%s] Directory not monitored: %s", get_current_time(), command_parts[1].c_str());
                     cout << message << endl;
                     if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                         perror("Failed to open fss_in");
@@ -546,7 +546,7 @@ int main(int argc, char* argv[]) {
                 sync_info_mem_store[command_parts[1]]->monitored = false;
                 sync_info_mem_store[command_parts[1]]->status = "Inactive";
                 char message[MESSAGE_SIZE];
-                snprintf(message, MESSAGE_SIZE, "[%s] Monitoring stopped for %s\n", get_current_time(), command_parts[1].c_str());
+                snprintf(message, MESSAGE_SIZE, "[%s] Monitoring stopped for %s", get_current_time(), command_parts[1].c_str());
                 cout << message << endl;
                 if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                     perror("Failed to open fss_in");
@@ -562,7 +562,7 @@ int main(int argc, char* argv[]) {
 
                 shutdown = true;
                 char message[MESSAGE_SIZE];
-                snprintf(message, MESSAGE_SIZE, "[%s] Shutting down manager...\n[%s] Waiting for all active workers to finish.\n[%s] Processing remaining queued tasks.\n", get_current_time(), get_current_time(), get_current_time());
+                snprintf(message, MESSAGE_SIZE, "[%s] Shutting down manager...\n[%s] Waiting for all active workers to finish.\n[%s] Processing remaining queued tasks.", get_current_time(), get_current_time(), get_current_time());
                 cout << message << endl;
                 if ( (fd_fss_out = open("fss_out", O_WRONLY | O_NONBLOCK) ) < 0) {
                     perror("Failed to open fss_in");
@@ -604,7 +604,7 @@ int main(int argc, char* argv[]) {
 
 
     char message[MESSAGE_SIZE];
-    snprintf(message, MESSAGE_SIZE, "[%s] Manager shutdown complete\n", get_current_time());
+    snprintf(message, MESSAGE_SIZE, "[%s] Manager shutdown complete", get_current_time());
     cout << message << endl;
     ssize_t n = write(fd_fss_out, message, strlen(message));
     //close(fd_fss_out);   

@@ -121,7 +121,6 @@ int main(int argc, char *argv[]) {
     char* operation = argv[4]; //FULL, ADDED, MODIFIED, DELETED
 
     report_info_struct report_info;
-    strcpy(report_info.timestamp, get_current_time());
     report_info.source = source;
     report_info.dest = destination;
     report_info.filename = filename;
@@ -222,25 +221,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-
-    snprintf(exec_report, REPORT_SIZE, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s\nSTATUS=%s\nERRORS=%s\nNUM=%d", report_info.timestamp, report_info.source.c_str(), report_info.dest.c_str(), report_info.pid, report_info.operation.c_str(), report_info.status.c_str(), report_info.errors, report_info.num);
     sleep(10);
+
+    strcpy(report_info.timestamp, get_current_time());
+    snprintf(exec_report, REPORT_SIZE, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s\nSTATUS=%s\nERRORS=%s\nNUM=%d", report_info.timestamp, report_info.source.c_str(), report_info.dest.c_str(), report_info.pid, report_info.operation.c_str(), report_info.status.c_str(), report_info.errors, report_info.num);
     cout << exec_report << endl; //send to pipe
     cout.flush();   //maybe uselles
 
-    /*cout << "TIMESTAMP=" << report_info.timestamp << endl
-     << "SOURCE=" << report_info.source << endl
-     << "DEST=" << report_info.dest << endl
-     << "PID=" << report_info.pid << endl
-     << "OP=" << report_info.operation << endl
-     << "STATUS=" << report_info.status << endl
-     << "ERRORS=" << report_info.errors << endl
-     << "NUM=" << report_info.num;*/
-    //cout.flush();   //maybe uselles
-    
-    /*free(additional_info);
-    free(report_buffer);
-    free(error_buffer);*/
     exit(0);
-
 }
