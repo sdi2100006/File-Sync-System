@@ -18,8 +18,8 @@
 
 #define READ 0
 #define WRITE 1
-#define REPORT_SIZE 256
-#define MESSAGE_SIZE 256
+#define REPORT_SIZE 512
+#define MESSAGE_SIZE 1024
 #define INOTIFY_SIZE 4096
 
 using namespace std;

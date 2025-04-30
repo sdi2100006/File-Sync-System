@@ -121,7 +121,7 @@ int main (int argc, char* argv[]) {
             exit(1);
         }
             
-        char buffer[256];
+        char buffer[512];
         ssize_t s = read(fd_fss_out, buffer, sizeof(buffer));
         //close(fd_fss_out);
         if (s > 0) {
@@ -140,7 +140,7 @@ int main (int argc, char* argv[]) {
                // exit(1);
             //}
                 
-            char buffer[256];
+            char buffer[512];
             ssize_t s = read(fd_fss_out, buffer, sizeof(buffer));
             close(fd_fss_out);
             if (s > 0) {
