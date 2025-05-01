@@ -1,6 +1,4 @@
 #!/bin/sh
-# This is a comment!
-
 while getopts p:c: flag
 do
     case $flag in
