@@ -18,11 +18,11 @@ if [ -z "$PATH_NAME" ] || [ -z "$COMMAND" ];
 fi
 
 case $COMMAND in
-    listAll) ;;
+    listAll) echo "I havent done that :( ";;
 
-    listMonitored) ;;
+    listMonitored) echo "I havent done that :( ";;
 
-    listStoped) ;;
+    listStoped) echo "I havent done that :( ";;
 
     purge)  if [ -e "$PATH_NAME" ]; 
                 then if [ -f "$PATH_NAME" ];
