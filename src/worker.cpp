@@ -12,21 +12,22 @@
 #include <string>
 #include <bits/stdc++.h>
 #include <unordered_map>
-#include "../include/sync_info_mem_store.hpp"
 #include <queue>
 #include <sys/inotify.h>
 #include <dirent.h>
 #include "../include/utilities.hpp"
+#include "../include/types.hpp"
+#include "../include/worker_helpers.hpp"
 
 using namespace std;
-
+/*
 #define SIZE 128
 #define PERM 0644
 #define BUFFSIZE 4096
 #define ERROR_SIZE 512
 #define REPORT_SIZE 1024
 
-typedef struct report_info{
+typedef struct report_info_worker{
     char timestamp[20];
     string source;
     string dest;
@@ -36,82 +37,7 @@ typedef struct report_info{
     string status;
     char errors[ERROR_SIZE];
     int num;
-} report_info_struct;
-
-//copy file name1 to file name2
-int copy_file(const char* name1, const char* name2, char* error_buffer) {
-    int infile, outfile;
-    size_t nread;
-    char buffer[BUFFSIZE];
-
-    //checks
-    if ( (infile=open(name1, O_RDONLY)) == -1) {
-        snprintf(error_buffer, SIZE, "Can't open source file '%s' during copy. %s", name1, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
-        return -5;
-        //exit(-2);
-    }
-    if ( (outfile=open(name2, O_WRONLY|O_CREAT|O_TRUNC, PERM)) == -1) {
-        snprintf(error_buffer, SIZE, "Can't open dest file '%s' during copy. %s", name2, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
-        return -5;
-        //exit(-2);
-    }
-
-    while ( (nread=read(infile, buffer, BUFFSIZE)) > 0) {
-        if ( write(outfile, buffer, nread) < nread) {
-            close(infile);
-            close(outfile);
-            snprintf(error_buffer, SIZE, "error writing to file '%s' during copy. %s", name2, strerror(errno));
-            cout << "error_buffer: " << error_buffer << endl;
-            return -3;
-        }
-        ///cout << "shit" << endl;
-    }
-    if (nread == -1) {
-        close(infile);
-        close(outfile);
-        snprintf(error_buffer, SIZE, "error reading from file '%s' during copy. %s", name1, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
-        return -4;
-    }
-    if (close(infile) == -1) {
-        snprintf(error_buffer, SIZE, "error closing source file '%s' during copy. %s", name1, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
-        return -4;
-    }
-    if (close(outfile) == -1) {
-        snprintf(error_buffer, SIZE, "error closing dest file '%s' during copy. %s", name2, strerror(errno));
-        cout << "error_buffer: " << error_buffer << endl;
-        return -4;
-    }
-
-    return 0;
-}
-
-//parses the given directory and retruns a vector containing the file names
-vector<char*> parse_directory(const char dirname[]) {
-    DIR *dir_ptr;
-    struct dirent *direntp;
-    vector<char*> files;
-
-    if( (dir_ptr = opendir(dirname) ) == NULL ) {
-        perror("opendir");
-    } else {
-        while ( (direntp=readdir(dir_ptr)) != NULL ) {
-
-            if ( strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0 )
-                continue;
-
-            char* file;
-
-            files.push_back(strdup(direntp->d_name));   //insert a duplacate of d_name i need to free them after SOS!!!
-        }
-        closedir(dir_ptr);
-    }
-    return files;
-}
-
+} report_info_worker_struct;*/
 
 int main(int argc, char *argv[]) {
     //process args MAYBE MAKE THEM STRINGS - NO KEEP EVERYTHING CRITICAL AS A CHAR* OR A TABLE ?
@@ -120,7 +46,7 @@ int main(int argc, char *argv[]) {
     char* filename = argv[3]; //if we want a full sync  it should be ALL
     char* operation = argv[4]; //FULL, ADDED, MODIFIED, DELETED
 
-    report_info_struct report_info;
+    report_info_worker_struct report_info;
     report_info.source = source;
     report_info.dest = destination;
     report_info.filename = filename;
@@ -221,7 +147,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    sleep(10);
+    //sleep(10);
 
     strcpy(report_info.timestamp, get_current_time());
     snprintf(exec_report, REPORT_SIZE, "TIMESTAMP=%s\nSOURCE=%s\nDEST=%s\nPID=%d\nOP=%s\nSTATUS=%s\nERRORS=%s\nNUM=%d", report_info.timestamp, report_info.source.c_str(), report_info.dest.c_str(), report_info.pid, report_info.operation.c_str(), report_info.status.c_str(), report_info.errors, report_info.num);

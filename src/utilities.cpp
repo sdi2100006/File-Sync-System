@@ -1,10 +1,6 @@
 #include "../include/utilities.hpp"
-#include <time.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream>
-
-using namespace std;
+#include <ctime>
+#include <cstdlib>
 
 char* get_current_time () {
     time_t raw_time;

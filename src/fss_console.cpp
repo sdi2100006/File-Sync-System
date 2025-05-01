@@ -12,12 +12,13 @@
 #include <string>
 #include <bits/stdc++.h>
 #include <unordered_map>
-#include "../include/sync_info_mem_store.hpp"
 #include <queue>
 #include <sys/inotify.h>
 #include <time.h>
 #include <poll.h>
 #include "../include/utilities.hpp"
+#include "../include/types.hpp"
+
 using namespace std;
 
 int main (int argc, char* argv[]) {
@@ -100,7 +101,7 @@ int main (int argc, char* argv[]) {
 
         //commands are correct
 
-        int fd_fss_in = open("fss_in", O_WRONLY  /*|O_NONBLOCK*/);
+        int fd_fss_in = open("fss_in", O_WRONLY);
         if ( fd_fss_in == -1 ){
             perror("failed to open fss_in");
             exit(1);
@@ -111,10 +112,9 @@ int main (int argc, char* argv[]) {
             close(fd_fss_in);
             exit(-1);
         }  
-        //logfile << user_input << endl;
         close(fd_fss_in);
 
-
+        //wait to read response from manager
         int fd_fss_out = open("fss_out", O_RDONLY );
         if ( fd_fss_out == -1){
             perror("failed to open fss_out");
@@ -123,7 +123,7 @@ int main (int argc, char* argv[]) {
             
         char buffer[512];
         ssize_t s = read(fd_fss_out, buffer, sizeof(buffer));
-        //close(fd_fss_out);
+        //close(fd_fss_out); no need
         if (s > 0) {
             buffer[s] = '\0'; // Null-terminate because i had garbage values
             cout << buffer << endl;
@@ -144,7 +144,7 @@ int main (int argc, char* argv[]) {
             ssize_t s = read(fd_fss_out, buffer, sizeof(buffer));
             close(fd_fss_out);
             if (s > 0) {
-                buffer[s] = '\0'; // Null-terminate
+                buffer[s] = '\0'; 
                 cout << buffer << endl;
                logfile << buffer << endl;
             } else {

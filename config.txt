@@ -3,3 +3,8 @@
 ./tests/sources/test3 ./tests/backups/test3_backup
 ./tests/sources/test4 ./tests/backups/test4_backup
 ./tests/sources/test5 ./tests/backups/test5_backup
+./tests/sources/test6 ./tests/backups/test6_backup
+./tests/sources/test7 ./tests/backups/test7_backup
+./tests/sources/test8 ./tests/backups/test8_backup
+./tests/sources/test9 ./tests/backups/test9_backup
+./tests/sources/test10 ./tests/backups/test10_backup
