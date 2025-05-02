@@ -152,7 +152,6 @@ void spawn_workers(struct job& job, int& sync_fd, unordered_map<string, sync_inf
         sync_fd = pipe_fd[READ];
     }
     pid_t workerpid;
-    //cout << "fork" << endl;
     workerpid = fork();
     if (workerpid == -1) {
         perror("Failed to fork");
@@ -213,8 +212,6 @@ int handle_exec_report_events(struct pollfd* poll_fds, int worker_limit, int& sy
 
             if (poll_fds[i].fd == sync_fd) {    //special case for the sync command - diferent logs 
                 sync_fd = -1;   //reinitialize
-                //cout << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
-                //logfile << "[" << get_current_time() << "] " <<"Sync completed " << report_info.source << " -> " << report_info.dest << " Errors:" << sync_info_mem_store[report_info.source]->error_count << endl;
                 char message[MESSAGE_SIZE];
                 snprintf(message, MESSAGE_SIZE, "[%s] Sync completed: %s -> %s Errors:%d", get_current_time(), report_info.source.c_str(), report_info.dest.c_str(), sync_info_mem_store[report_info.source]->error_count);
                 cout << message << endl;
@@ -287,7 +284,6 @@ void handle_and_log_job(struct job& job, char* sync_response, bool shutdown, ofs
 int handle_inotify_events(bool shutdown, pollfd poll_inotify_fds, int inotify_fd, unordered_map<string, sync_info_struct*>& sync_info_mem_store, deque <job_struct>& jobs_queue) {
     /*poll for reading events from inotify*/
     if (shutdown == false) {    //we dont want to do this after a shutdown command
-        //cout << "before inotify" << endl;
         int poll_inotify = poll(&poll_inotify_fds, 1, 100);
         if (poll_inotify == -1) {
             if (errno == EINTR) {   //this is for the error "poll interupted by signal SIGCHLD "
@@ -304,7 +300,6 @@ int handle_inotify_events(bool shutdown, pollfd poll_inotify_fds, int inotify_fd
             if (length < 0) {
                 perror("read from inotify");
             }
-            //cout << "reaaad" << endl;
             int i=0;
             while (i < length) {
                 struct inotify_event* event = (struct inotify_event*)&inotify_buffer[i];
@@ -329,7 +324,6 @@ int handle_inotify_events(bool shutdown, pollfd poll_inotify_fds, int inotify_fd
                 new_job.fromconsole = false;
                 new_job.sync = false;
                 jobs_queue.push_front(new_job);        //PUSH TO THE FRONT OF DEQUEUE  
-                //cout << "pushed" << endl;  
                 i += sizeof(struct inotify_event) + event->len;
             }
         }

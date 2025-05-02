@@ -20,27 +20,10 @@
 #include "../include/worker_helpers.hpp"
 
 using namespace std;
-/*
-#define SIZE 128
-#define PERM 0644
-#define BUFFSIZE 4096
-#define ERROR_SIZE 512
-#define REPORT_SIZE 1024
 
-typedef struct report_info_worker{
-    char timestamp[20];
-    string source;
-    string dest;
-    string filename;
-    pid_t pid;
-    string operation;
-    string status;
-    char errors[ERROR_SIZE];
-    int num;
-} report_info_worker_struct;*/
 
 int main(int argc, char *argv[]) {
-    //process args MAYBE MAKE THEM STRINGS - NO KEEP EVERYTHING CRITICAL AS A CHAR* OR A TABLE ?
+ 
     char* source = argv[1];
     char* destination = argv[2];
     char* filename = argv[3]; //if we want a full sync  it should be ALL

@@ -68,7 +68,7 @@ vector<char*> parse_directory(const char dirname[]) {
     } else {
         while ( (direntp=readdir(dir_ptr)) != NULL ) {
 
-            if ( strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0 ) {
+            if ( strcmp(direntp->d_name, ".") == 0 || strcmp(direntp->d_name, "..") == 0 ) {   //skip curent and back direcotries
                 continue;
             }
 
