@@ -1,6 +1,5 @@
-# hw1-sdi2100006
-Name: Konstantinos Arastsiaris  
-AM: 1115202100006 
+# File-Sync-System
+Name: Konstantinos Arastsiaris   
 
 
 ## 1. General
